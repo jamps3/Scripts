@@ -7,7 +7,7 @@ hostname
 port(optional)
 alias
 ```
-it creates a SSH key (if it doesn't exist yet) and an alias (ssh *user*) for effortless SSH login.
+it creates a SSH key (if it doesn't exist yet) and an alias (ssh *alias*) for effortless SSH login.
 
 ```
 ./Add-SSHHost.ps1
