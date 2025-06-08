@@ -21,8 +21,7 @@ Please select an option: 1
 === Configured SSH Hosts ===
 Alias           Hostname                  User            Port    
 -----------------------------------------------------------------
-111.222.150.1   111.222.150.1             jamps3          22      
-jamps3          99.2.1.3                  jamps3          22      
+user            1.2.3.4                   user            22      
 boss            123.123.123.123           root            22      
 
 Total hosts: 3
@@ -78,9 +77,8 @@ Please select an option: 1
 === Configured SSH Hosts ===
 Alias           Hostname                  User            Port    
 -----------------------------------------------------------------
-1.2.3.4         1.2.3.4                   user            22      
-user            95.216.152.29             user            22      
-root            157.180.92.88             root            22      
+user            1.2.3.4                   user            22      
+boss            123.123.123.123           root            22      
 userinter       user.inter.net            user            22      
 
 Total hosts: 4
