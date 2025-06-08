@@ -5,6 +5,7 @@ Script asks for:
 user
 hostname
 port(optional)
+alias
 ```
 it creates a SSH key (if it doesn't exist yet) and an alias (ssh *user*) for effortless SSH login.
 
