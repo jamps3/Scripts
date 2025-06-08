@@ -71,9 +71,9 @@ function Show-SSHHosts {
     Write-Host ("{0,-15} {1,-25} {2,-15} {3,-8}" -f "Alias", "Hostname", "User", "Port") -ForegroundColor White
     Write-Host ("-" * 65) -ForegroundColor Gray
     
-    foreach ($host in $hosts) {
-        $port = if ($host.Port) { $host.Port } else { "22" }
-        Write-Host ("{0,-15} {1,-25} {2,-15} {3,-8}" -f $host.Alias, $host.HostName, $host.User, $port) -ForegroundColor White
+    foreach ($sshHost in $hosts) {
+        $port = if ($sshHost.Port) { $sshHost.Port } else { "22" }
+        Write-Host ("{0,-15} {1,-25} {2,-15} {3,-8}" -f $sshHost.Alias, $sshHost.HostName, $sshHost.User, $port) -ForegroundColor White
     }
     
     Write-Host "`nTotal hosts: $($hosts.Count)" -ForegroundColor Gray
@@ -426,7 +426,7 @@ while ($true) {
         }
         "4" { 
             Write-Host "Goodbye!" -ForegroundColor Cyan
-            break 
+            exit
         }
         default { 
             Write-Host "Invalid option. Please try again." -ForegroundColor Red
