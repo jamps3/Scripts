@@ -22,10 +22,10 @@ param(
 )
 
 # Color output functions
-function Write-Info { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Cyan }
-function Write-Success { param($Message) Write-Host "[SUCCESS] $Message" -ForegroundColor Green }
-function Write-Warning { param($Message) Write-Host "[WARNING] $Message" -ForegroundColor Yellow }
-function Write-Error { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
+function Write-Info { param($Message) Write-Host "INFO: $Message" -ForegroundColor Cyan }
+function Write-Success { param($Message) Write-Host "SUCCESS: $Message" -ForegroundColor Green }
+function Write-Warning { param($Message) Write-Host "WARNING: $Message" -ForegroundColor Yellow }
+function Write-Error { param($Message) Write-Host "ERROR: $Message" -ForegroundColor Red }
 
 # Check if rsync is available
 function Test-RsyncAvailable {
@@ -112,15 +112,15 @@ function Invoke-RsyncTransfer {
 
 # Main migration function
 function Start-ServerMigration {
-    Write-Info "Starting server migration from $SourceServer to $DestServer"
-    Write-Info "SSH User: $SSHUser"
+    Write-Host Testing
+    # Write-Info SSH User
     
     if ($DryRun) {
-        Write-Warning "DRY RUN MODE ENABLED - No actual changes will be made"
+        # Write-Warning DRY RUN MODE ENABLED
     }
     
     # Pre-flight checks
-    Write-Info "Performing pre-flight checks..."
+    # Write-Info Performing pre-flight checks
     
     if (-not (Test-RsyncAvailable)) {
         return $false
@@ -134,7 +134,7 @@ function Start-ServerMigration {
         return $false
     }
     
-    Write-Success "Pre-flight checks passed"
+    # Write-Success Pre-flight checks passed
     
     # Define sync operations
     $syncOperations = @(
@@ -252,4 +252,5 @@ catch {
 finally {
     Write-Info "Script execution finished at $(Get-Date)"
 }
+
 
