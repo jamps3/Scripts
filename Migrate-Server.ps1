@@ -92,19 +92,18 @@ function Invoke-RsyncTransfer {
     
     # Execute rsync
     $rsyncCmd = "rsync " + ($rsyncOptions -join " ") + " `"$Source`" `"$Destination`"
-    Write-Info "Executing: $rsyncCmd"
+    # Executing rsync command
     
     try {
         Invoke-Expression $rsyncCmd
         if ($LASTEXITCODE -eq 0) {
-            Write-Success "$Description sync completed successfully"
         } else {
-            Write-Error "$Description sync failed with exit code $LASTEXITCODE"
+            # Write-Error - sync failed
             return $false
         }
     }
     catch {
-        Write-Error "Error executing rsync for $Description : $_"
+        # Write-Error - rsync execution failed
         return $false
     }
     
