@@ -16,7 +16,7 @@
 param(
     [string]$SourceServer = "root-enia",
     [string]$DestServer = "root-enia2",
-    [string]$SSHUser = "root",
+    [string]$uname = "root",
     [switch]$DryRun = $false,
     [switch]$Verbose = $false
 )
@@ -91,19 +91,20 @@ function Invoke-RsyncTransfer {
     }
     
     # Execute rsync
-    $rsyncCmd = "rsync " + ($rsyncOptions -join " ") + " `"$Source`" `"$Destination`"
+    $rsyncCmd = "rsync " + ($rsyncOptions -join " ") + " `"$Source`" `"$Destination`""
     # Executing rsync command
     
     try {
         Invoke-Expression $rsyncCmd
         if ($LASTEXITCODE -eq 0) {
+            return $true
         } else {
-            # Write-Error - sync failed
+            Write-Error "Rsync operation failed for $Description"
             return $false
         }
     }
     catch {
-        # Write-Error - rsync execution failed
+        Write-Error "Rsync execution failed for $Description : $($_.Exception.Message)"
         return $false
     }
     
@@ -112,79 +113,73 @@ function Invoke-RsyncTransfer {
 
 # Main migration function
 function Start-ServerMigration {
-    Write-Host Testing
-    # Write-Info SSH User
+    Write-Info "Starting server migration process..."
+    Write-Info "SSH User: $uname"
     
     if ($DryRun) {
-        # Write-Warning DRY RUN MODE ENABLED
+        Write-Warning "DRY RUN MODE ENABLED - No actual changes will be made"
     }
     
     # Pre-flight checks
-    # Write-Info Performing pre-flight checks
+    Write-Info "Performing pre-flight checks..."
     
     if (-not (Test-RsyncAvailable)) {
         return $false
     }
     
-    if (-not (Test-SSHConnectivity -Server $SourceServer -User $SSHUser)) {
+    if (-not (Test-SSHConnectivity -Server $SourceServer -User $uname)) {
         return $false
     }
     
-    if (-not (Test-SSHConnectivity -Server $DestServer -User $SSHUser)) {
+    if (-not (Test-SSHConnectivity -Server $DestServer -User $uname)) {
         return $false
     }
     
-    # Write-Success Pre-flight checks passed
+    Write-Success "Pre-flight checks passed"
     
     # Define sync operations
     $syncOperations = @(
         @{
-            Source = "$SSHUser@${SourceServer}:/etc/"
-            Destination = "$SSHUser@${DestServer}:/etc/"
-            Description = "System configuration (/etc)"
-            ExtraOptions = @("--exclude=fstab", "--exclude=hostname", "--exclude=hosts")
-        },
-        @{
-            Source = "$SSHUser@${SourceServer}:/home/"
-            Destination = "$SSHUser@${DestServer}:/home/"
-            Description = "User home directories (/home)"
+            Source = $uname + '@' + $SourceServer + ':/home/'
+            Destination = $uname + '@' + $DestServer + ':/home/'
+            Description = 'User home directories (/home)'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/root/"
-            Destination = "$SSHUser@${DestServer}:/root/"
-            Description = "Root home directory (/root)"
+            Source = $uname + '@' + $SourceServer + ':/root/'
+            Destination = $uname + '@' + $DestServer + ':/root/'
+            Description = 'Root home directory (/root)'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/var/www/"
-            Destination = "$SSHUser@${DestServer}:/var/www/"
-            Description = "Web server data (/var/www)"
+            Source = $uname + '@' + $SourceServer + ':/var/www/'
+            Destination = $uname + '@' + $DestServer + ':/var/www/'
+            Description = 'Web server data (/var/www)'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/var/log/nginx/"
-            Destination = "$SSHUser@${DestServer}:/var/log/nginx/"
-            Description = "Nginx logs"
+            Source = $uname + '@' + $SourceServer + ':/var/log/nginx/'
+            Destination = $uname + '@' + $DestServer + ':/var/log/nginx/'
+            Description = 'Nginx logs'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/usr/local/"
-            Destination = "$SSHUser@${DestServer}:/usr/local/"
-            Description = "Local applications (/usr/local)"
+            Source = $uname + '@' + $SourceServer + ':/usr/local/'
+            Destination = $uname + '@' + $DestServer + ':/usr/local/'
+            Description = 'Local applications (/usr/local)'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/opt/"
-            Destination = "$SSHUser@${DestServer}:/opt/"
-            Description = "Optional software (/opt)"
+            Source = $uname + '@' + $SourceServer + ':/opt/'
+            Destination = $uname + '@' + $DestServer + ':/opt/'
+            Description = 'Optional software (/opt)'
             ExtraOptions = @()
         },
         @{
-            Source = "$SSHUser@${SourceServer}:/var/lib/"
-            Destination = "$SSHUser@${DestServer}:/var/lib/"
-            Description = "Application data (/var/lib)"
-            ExtraOptions = @("--exclude=docker", "--exclude=containerd")
+            Source = $uname + '@' + $SourceServer + ':/var/lib/'
+            Destination = $uname + '@' + $DestServer + ':/var/lib/'
+            Description = 'Application data (/var/lib)'
+            ExtraOptions = @('--exclude=docker', '--exclude=containerd')
         }
     )
     
@@ -193,7 +188,8 @@ function Start-ServerMigration {
     $totalOperations = $syncOperations.Count
     
     foreach ($operation in $syncOperations) {
-        Write-Info "\n=== Operation $($successCount + 1) of $totalOperations ==="
+        Write-Host ""
+        Write-Info "=== Operation $($successCount + 1) of $totalOperations ==="
         
         $result = Invoke-RsyncTransfer -Source $operation.Source -Destination $operation.Destination -Description $operation.Description -ExtraOptions $operation.ExtraOptions
         
@@ -205,7 +201,8 @@ function Start-ServerMigration {
     }
     
     # Final summary
-    Write-Info "\n=== Migration Summary ==="
+    Write-Host ""
+    Write-Info "=== Migration Summary ==="
     Write-Info "Total operations: $totalOperations"
     Write-Info "Successful: $successCount"
     Write-Info "Failed: $($totalOperations - $successCount)"
@@ -214,7 +211,8 @@ function Start-ServerMigration {
         Write-Success "All migration operations completed successfully!"
         
         if (-not $DryRun) {
-            Write-Info "\nPost-migration recommendations:"
+            Write-Host ""
+            Write-Info "Post-migration recommendations:"
             Write-Info "1. Restart services on $DestServer (nginx, ssh, etc.)"
             Write-Info "2. Update any server-specific configurations"
             Write-Info "3. Test all applications and services"
@@ -246,11 +244,9 @@ try {
     }
 }
 catch {
-    Write-Error "Unexpected error during migration: $_"
+    Write-Error "Unexpected error during migration: $($_.Exception.Message)"
     exit 1
 }
 finally {
     Write-Info "Script execution finished at $(Get-Date)"
 }
-
-
