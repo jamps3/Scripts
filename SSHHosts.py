@@ -195,6 +195,67 @@ def add_ssh_host():
 
     if not os.path.exists(private_key_path):
         print(f"No SSH key found at {private_key_path}")
+        if not IS_WINDOWS:
+            create_keys = input("No SSH key found! Would you like to generate one? (y/n): ").strip().lower()
+            if create_keys == 'y':
+                email = input("Enter your email for the SSH key comment: ").strip()
+                try:
+                    # Create a new key pair
+                    subprocess.run([
+                        'ssh-keygen',
+                        '-t', 'ed25519',
+                        '-f', private_key_path,
+                        '-C', email,
+                        '-N', ''  # No passphrase
+                    ], check=True)
+                    print("SSH key pair generated successfully!")
+                    
+                    # Set proper file permissions for the generated keys
+                    set_file_permissions(private_key_path, 'private_key')
+                    set_file_permissions(public_key_path, 'public_key')
+                    
+                    # Ask if user wants to copy the public key to the remote server
+                    copy_key = input(f"Would you like to copy the public key to {hostname} for passwordless login? (y/n): ").strip().lower()
+                    if copy_key == 'y':
+                        try:
+                            # Use ssh-copy-id to copy the public key
+                            ssh_copy_cmd = ['ssh-copy-id', '-i', public_key_path]
+                            if port != 22:
+                                ssh_copy_cmd.extend(['-p', str(port)])
+                            ssh_copy_cmd.append(f"{username}@{hostname}")
+                            
+                            print(f"Copying public key to {hostname}...")
+                            subprocess.run(ssh_copy_cmd, check=True)
+                            print("Public key copied successfully! Passwordless login should now work.")
+                        except subprocess.CalledProcessError as e:
+                            print(f"Error copying public key: {e}")
+                            print("You may need to copy the public key manually.")
+                        except FileNotFoundError:
+                            print("ssh-copy-id not found. You may need to copy the public key manually.")
+                            print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
+                    
+                except subprocess.CalledProcessError as e:
+                    print(f"Error generating key: {e}")
+    elif not IS_WINDOWS and os.path.exists(public_key_path):
+        # SSH key exists, ask if user wants to copy it to the remote server
+        copy_existing_key = input(f"SSH key exists. Would you like to copy it to {hostname} for passwordless login? (y/n): ").strip().lower()
+        if copy_existing_key == 'y':
+            try:
+                # Use ssh-copy-id to copy the existing public key
+                ssh_copy_cmd = ['ssh-copy-id', '-i', public_key_path]
+                if port != 22:
+                    ssh_copy_cmd.extend(['-p', str(port)])
+                ssh_copy_cmd.append(f"{username}@{hostname}")
+                
+                print(f"Copying existing public key to {hostname}...")
+                subprocess.run(ssh_copy_cmd, check=True)
+                print("Public key copied successfully! Passwordless login should now work.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error copying public key: {e}")
+                print("You may need to copy the public key manually.")
+            except FileNotFoundError:
+                print("ssh-copy-id not found. You may need to copy the public key manually.")
+                print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
 
     # Create SSH config file if it doesn't exist
     if not os.path.exists(ssh_config_path):
