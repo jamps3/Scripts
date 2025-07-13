@@ -160,7 +160,6 @@ function Remove-SSHHost {
 
 # Function to show main menu
 function Show-Menu {
-    Clear-Host
     Write-Host "=== SSH Host Manager ===" -ForegroundColor Cyan
     Write-Host "1. List SSH hosts" -ForegroundColor White
     Write-Host "2. Add new SSH host" -ForegroundColor White
