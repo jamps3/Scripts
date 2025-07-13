@@ -232,7 +232,7 @@ def add_ssh_host():
                             print("You may need to copy the public key manually.")
                         except FileNotFoundError:
                             print("ssh-copy-id not found. You may need to copy the public key manually.")
-                            print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
+                            print(f"To copy manually, run: cat {public_key_path} and add it to {os.path.join('~', '.ssh', 'authorized_keys')} on the remote server.")
                     
                 except subprocess.CalledProcessError as e:
                     print(f"Error generating key: {e}")
@@ -255,7 +255,7 @@ def add_ssh_host():
                 print("You may need to copy the public key manually.")
             except FileNotFoundError:
                 print("ssh-copy-id not found. You may need to copy the public key manually.")
-                print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
+                print(f"To copy manually, run: cat {public_key_path} and add it to {os.path.join('~', '.ssh', 'authorized_keys')} on the remote server.")
 
     # Create SSH config file if it doesn't exist
     if not os.path.exists(ssh_config_path):
