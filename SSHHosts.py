@@ -1,9 +1,44 @@
 import os
 import re
+import platform
+import subprocess
+import sys
+
+# Detect operating system
+IS_WINDOWS = platform.system() == 'Windows'
 
 # Define SSH paths
 ssh_directory = os.path.join(os.path.expanduser('~'), '.ssh')
 ssh_config_path = os.path.join(ssh_directory, 'config')
+
+# Platform-specific clear screen function
+def clear_screen():
+    """Clear the terminal screen based on the operating system."""
+    if IS_WINDOWS:
+        os.system('cls')
+    else:
+        os.system('clear')
+
+# Get platform-specific file permissions
+def get_ssh_permissions():
+    """Get appropriate file permissions for SSH files based on platform."""
+    if IS_WINDOWS:
+        return None  # Windows doesn't use Unix-style permissions
+    else:
+        return {
+            'ssh_dir': 0o700,   # rwx------
+            'config': 0o600,    # rw-------
+            'private_key': 0o600,  # rw-------
+            'public_key': 0o644    # rw-r--r--
+        }
+
+# Set file permissions if on Unix-like system
+def set_file_permissions(filepath, perm_type):
+    """Set appropriate file permissions on Unix-like systems."""
+    if not IS_WINDOWS:
+        perms = get_ssh_permissions()
+        if perms and perm_type in perms:
+            os.chmod(filepath, perms[perm_type])
 
 def test_empty_string(value, field_name):
     """Return True if the string is empty or whitespace, otherwise False."""
@@ -152,6 +187,8 @@ def add_ssh_host():
 
     if not os.path.exists(ssh_directory):
         os.makedirs(ssh_directory)
+        set_file_permissions(ssh_directory, 'ssh_dir')
+        print(f"Created SSH directory: {ssh_directory}")
 
     private_key_path = os.path.join(ssh_directory, 'id_ed25519')
     public_key_path = private_key_path + '.pub'
@@ -163,6 +200,7 @@ def add_ssh_host():
     if not os.path.exists(ssh_config_path):
         with open(ssh_config_path, 'w') as file:
             file.write('')
+        set_file_permissions(ssh_config_path, 'config')
         print(f"Created SSH config file: {ssh_config_path}")
 
     needs_new_line = False
@@ -203,7 +241,8 @@ def add_ssh_host():
 
 def show_menu():
     """Show main menu."""
-    print("=== SSH Host Manager ===")
+    platform_name = "Windows" if IS_WINDOWS else platform.system()
+    print(f"=== SSH Host Manager ({platform_name}) ===")
     print("1. List SSH hosts")
     print("2. Add new SSH host")
     print("3. Remove SSH host")
