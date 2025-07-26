@@ -66,7 +66,8 @@ def get_ssh_hosts():
                     "Alias": match.group(1),
                     "HostName": "",
                     "User": "",
-                    "Port": "22"
+                    "Port": "22",
+                    "IdentityFile": ""
                 }
             elif current_host and re.match(r'^(\w+)\s+(.+)$', line):
                 key, value = re.match(r'^(\w+)\s+(.+)$', line).groups()
@@ -87,13 +88,26 @@ def show_ssh_hosts():
         return
 
     print("\n=== Configured SSH Hosts ===")
-    print(f"{'Alias':<15} {'Hostname':<25} {'User':<15} {'Port':<8}")
-    print("-" * 65)
+    print(f"{'Alias':<15} {'Hostname':<25} {'User':<15} {'Port':<8} {'Key File':<50}")
+    print("-" * 115)
 
     for host in hosts:
-        print(f"{host['Alias']:<15} {host['HostName']:<25} {host['User']:<15} {host['Port']:<8}")
+        # Get the key file path, or show default/none
+        key_file = host.get('IdentityFile', '')
+        if not key_file:
+            key_file = "(default SSH keys)"
+        else:
+            # Check if the key file exists
+            if os.path.exists(key_file):
+                key_status = "✓"
+            else:
+                key_status = "✗"
+            key_file = f"{key_status} {key_file}"
+        
+        print(f"{host['Alias']:<15} {host['HostName']:<25} {host['User']:<15} {host['Port']:<8} {key_file:<50}")
 
     print(f"\nTotal hosts: {len(hosts)}")
+    print("Legend: ✓ = Key file exists, ✗ = Key file missing")
     print("Use 'ssh <alias>' to connect to any host.\n")
 
 def remove_ssh_host():
@@ -195,30 +209,30 @@ def add_ssh_host():
 
     if not os.path.exists(private_key_path):
         print(f"No SSH key found at {private_key_path}")
-        if not IS_WINDOWS:
-            create_keys = input("No SSH key found! Would you like to generate one? (y/n): ").strip().lower()
-            if create_keys == 'y':
-                email = input("Enter your email for the SSH key comment: ").strip()
-                try:
-                    # Create a new key pair
-                    subprocess.run([
-                        'ssh-keygen',
-                        '-t', 'ed25519',
-                        '-f', private_key_path,
-                        '-C', email,
-                        '-N', ''  # No passphrase
-                    ], check=True)
-                    print("SSH key pair generated successfully!")
-                    
-                    # Set proper file permissions for the generated keys
-                    set_file_permissions(private_key_path, 'private_key')
-                    set_file_permissions(public_key_path, 'public_key')
-                    
-                    # Ask if user wants to copy the public key to the remote server
-                    copy_key = input(f"Would you like to copy the public key to {hostname} for passwordless login? (y/n): ").strip().lower()
-                    if copy_key == 'y':
+        create_keys = input("No SSH key found! Would you like to generate one? (y/n): ").strip().lower()
+        if create_keys == 'y':
+            email = input("Enter your email for the SSH key comment: ").strip()
+            try:
+                # Create a new key pair
+                subprocess.run([
+                    'ssh-keygen',
+                    '-t', 'ed25519',
+                    '-f', private_key_path,
+                    '-C', email,
+                    '-N', ''  # No passphrase
+                ], check=True)
+                print("SSH key pair generated successfully!")
+                
+                # Set proper file permissions for the generated keys (Unix-like systems only)
+                set_file_permissions(private_key_path, 'private_key')
+                set_file_permissions(public_key_path, 'public_key')
+                
+                # Ask if user wants to copy the public key to the remote server
+                copy_key = input(f"Would you like to copy the public key to {hostname} for passwordless login? (y/n): ").strip().lower()
+                if copy_key == 'y':
+                    if not IS_WINDOWS:
+                        # Use ssh-copy-id on Unix-like systems
                         try:
-                            # Use ssh-copy-id to copy the public key
                             ssh_copy_cmd = ['ssh-copy-id', '-i', public_key_path]
                             if port != 22:
                                 ssh_copy_cmd.extend(['-p', str(port)])
@@ -232,30 +246,106 @@ def add_ssh_host():
                             print("You may need to copy the public key manually.")
                         except FileNotFoundError:
                             print("ssh-copy-id not found. You may need to copy the public key manually.")
-                            print(f"To copy manually, run: cat {public_key_path} and add it to {os.path.join('~', '.ssh', 'authorized_keys')} on the remote server.")
-                    
-                except subprocess.CalledProcessError as e:
-                    print(f"Error generating key: {e}")
-    elif not IS_WINDOWS and os.path.exists(public_key_path):
+                            print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
+                    else:
+                        # On Windows, use alternative method to copy the public key
+                        try:
+                            print(f"Copying public key to {hostname}...")
+                            
+                            # Create the SSH command to copy the public key
+                            ssh_cmd = ['ssh']
+                            if port != 22:
+                                ssh_cmd.extend(['-p', str(port)])
+                            ssh_cmd.extend([f"{username}@{hostname}", 
+                                          "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"])
+                            
+                            # Read the public key content
+                            with open(public_key_path, 'r') as key_file:
+                                public_key_content = key_file.read().strip()
+                            
+                            # Use PowerShell/CMD to pipe the key content to SSH
+                            if IS_WINDOWS:
+                                # Use PowerShell to pipe the content
+                                ps_cmd = f'Get-Content "{public_key_path}" | ssh'
+                                if port != 22:
+                                    ps_cmd += f' -p {port}'
+                                ps_cmd += f' {username}@{hostname} "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"'
+                                
+                                result = subprocess.run(['powershell', '-Command', ps_cmd], 
+                                                       capture_output=True, text=True)
+                                
+                                if result.returncode == 0:
+                                    print("Public key copied successfully! Passwordless login should now work.")
+                                else:
+                                    print(f"Error copying public key: {result.stderr}")
+                                    print("Falling back to manual instructions...")
+                                    raise subprocess.CalledProcessError(result.returncode, ps_cmd)
+                                    
+                        except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
+                            print(f"Automatic key copying failed: {e}")
+                            print(f"\nTo enable passwordless login manually:")
+                            print(f"Public key location: {public_key_path}")
+                            print(f"\nOption 1 - Use PowerShell:")
+                            print(f'Get-Content "{public_key_path}" | ssh {username}@{hostname} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"')
+                            print(f"\nOption 2 - Copy manually:")
+                            print(f"1. Copy the contents of {public_key_path}")
+                            print(f"2. SSH to {hostname} and add it to ~/.ssh/authorized_keys")
+                
+            except subprocess.CalledProcessError as e:
+                print(f"Error generating key: {e}")
+            except FileNotFoundError:
+                print("Error: ssh-keygen not found. Please install OpenSSH or Git for Windows.")
+    elif os.path.exists(public_key_path):
         # SSH key exists, ask if user wants to copy it to the remote server
         copy_existing_key = input(f"SSH key exists. Would you like to copy it to {hostname} for passwordless login? (y/n): ").strip().lower()
         if copy_existing_key == 'y':
-            try:
-                # Use ssh-copy-id to copy the existing public key
-                ssh_copy_cmd = ['ssh-copy-id', '-i', public_key_path]
-                if port != 22:
-                    ssh_copy_cmd.extend(['-p', str(port)])
-                ssh_copy_cmd.append(f"{username}@{hostname}")
-                
-                print(f"Copying existing public key to {hostname}...")
-                subprocess.run(ssh_copy_cmd, check=True)
-                print("Public key copied successfully! Passwordless login should now work.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error copying public key: {e}")
-                print("You may need to copy the public key manually.")
-            except FileNotFoundError:
-                print("ssh-copy-id not found. You may need to copy the public key manually.")
-                print(f"To copy manually, run: cat {public_key_path} and add it to {os.path.join('~', '.ssh', 'authorized_keys')} on the remote server.")
+            if not IS_WINDOWS:
+                # Use ssh-copy-id on Unix-like systems
+                try:
+                    ssh_copy_cmd = ['ssh-copy-id', '-i', public_key_path]
+                    if port != 22:
+                        ssh_copy_cmd.extend(['-p', str(port)])
+                    ssh_copy_cmd.append(f"{username}@{hostname}")
+                    
+                    print(f"Copying existing public key to {hostname}...")
+                    subprocess.run(ssh_copy_cmd, check=True)
+                    print("Public key copied successfully! Passwordless login should now work.")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error copying public key: {e}")
+                    print("You may need to copy the public key manually.")
+                except FileNotFoundError:
+                    print("ssh-copy-id not found. You may need to copy the public key manually.")
+                    print(f"To copy manually, run: cat {public_key_path} and add it to ~/.ssh/authorized_keys on the remote server.")
+            else:
+                # On Windows, use alternative method to copy the existing public key
+                try:
+                    print(f"Copying existing public key to {hostname}...")
+                    
+                    # Use PowerShell to pipe the content
+                    ps_cmd = f'Get-Content "{public_key_path}" | ssh'
+                    if port != 22:
+                        ps_cmd += f' -p {port}'
+                    ps_cmd += f' {username}@{hostname} "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"'
+                    
+                    result = subprocess.run(['powershell', '-Command', ps_cmd], 
+                                           capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        print("Public key copied successfully! Passwordless login should now work.")
+                    else:
+                        print(f"Error copying public key: {result.stderr}")
+                        print("Falling back to manual instructions...")
+                        raise subprocess.CalledProcessError(result.returncode, ps_cmd)
+                        
+                except (subprocess.CalledProcessError, FileNotFoundError, Exception) as e:
+                    print(f"Automatic key copying failed: {e}")
+                    print(f"\nTo enable passwordless login manually:")
+                    print(f"Public key location: {public_key_path}")
+                    print(f"\nOption 1 - Use PowerShell:")
+                    print(f'Get-Content "{public_key_path}" | ssh {username}@{hostname} "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"')
+                    print(f"\nOption 2 - Copy manually:")
+                    print(f"1. Copy the contents of {public_key_path}")
+                    print(f"2. SSH to {hostname} and add it to ~/.ssh/authorized_keys")
 
     # Create SSH config file if it doesn't exist
     if not os.path.exists(ssh_config_path):
