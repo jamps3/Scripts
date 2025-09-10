@@ -1,6 +1,6 @@
-# SSH Management PowerShell Scripts
+# SSH Management Scripts (Python/PowerShell)
 
-This repository contains PowerShell scripts for SSH connection management and server migration tasks.
+This repository contains Python and PowerShell scripts for SSH connection management and server migration tasks.
 
 ## Add-SSHHost.ps1 - SSH Connection Setup
 
@@ -94,6 +94,8 @@ Use 'ssh <alias>' to connect to any host.
 
 Press any key to continue...
 ```
+
+## SSHHosts.py - SSH Connection Setup, Python version
 
 ## Migrate-Server.ps1 - Server Migration Tool
 
