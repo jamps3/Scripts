@@ -9,12 +9,13 @@ else:
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("width", type=int, nargs="?", default=360)
-parser.add_argument("height", type=int, nargs="?", default=92)
-parser.add_argument("fps", type=int, nargs="?", default=60)
-parser.add_argument("frames", type=int, nargs="?", default=1000)
-parser.add_argument("change_count", type=int, nargs="?", default=1)
-parser.add_argument("change_amount", type=float, nargs="?", default=0.05)
+parser.add_argument("width", type=int, nargs="?", default=360, help="Width in characters")
+parser.add_argument("height", type=int, nargs="?", default=92, help="Height in characters")
+parser.add_argument("fps", type=int, nargs="?", default=60, help="Frames per second")
+parser.add_argument("frames", type=int, nargs="?", default=10000, help="Total frames to display")
+parser.add_argument("palette", type=int, nargs="?", default=0, help="Palette index (1–8)")
+parser.add_argument("change_count", type=int, nargs="?", default=1, help="Number of parameters to change simultaneously")
+parser.add_argument("change_amount", type=float, nargs="?", default=0.05, help="Amount to change parameters by")
 args = parser.parse_args()
 
 WIDTH, HEIGHT = args.width, args.height
@@ -36,15 +37,37 @@ def get_key():
         dr, _, _ = select.select([sys.stdin], [], [], 0)
         return sys.stdin.read(1) if dr else None
 
+def show_controls():
+    controls = [
+        "🎮 Controls:",
+        "  w/s → freq_r ±",
+        "  a/d → freq_a ±",
+        "  i/k → phase_a ±",
+        "  j/l → phase_r ±",
+        "  p   → next palette",
+        "  q   → quit",
+        ""
+    ]
+    for i, line in enumerate(controls):
+        sys.stdout.write(f"\033[{i+1};1H\033[0m{line}")
+    sys.stdout.flush()
+
+def show_controls_inline():
+    sys.stdout.write("\033[1;1H\033[2K\033[0m")  # Clear line 1
+    sys.stdout.write(
+        "🎮 w/s=freq_r a/d=freq_a i/k=phase_a j/l=phase_r p=next_palette 1–8=select_palette h=help q=quit"
+    )
+    sys.stdout.flush()
+
 class MandalaParams:
-    def __init__(self):
+    def __init__(self, palette_index=0):
         self.freq_r = random.uniform(0.1, 1.5)
         self.freq_a = random.uniform(1.0, 6.0)
         self.phase_r = random.uniform(0, math.pi * 2)
         self.phase_a = random.uniform(0, math.pi * 2)
         self.offset_x = random.randint(-5, 5)
         self.offset_y = random.randint(-5, 5)
-        self.palettes = [
+        self.palettes = [  # 8 different character palettes
             [' ', '.', '*', '+', 'x', 'X', 'o', 'O', '@', '#'],
             [' ', '-', '=', '~', '^', '*', '%', '$', '&', '#'],
             [' ', '.', ':', ';', '!', '?', '/', '|', '\\', '#'],
@@ -54,7 +77,7 @@ class MandalaParams:
             [' ', '░', '▒', '▓', '▙', '▛', '▜', '▟', '█', '🟥'],
             [' ', '⎯', '⎼', '⎻', '﹏', '╌', '╍', '╏', '╎', '╳']
         ]
-        self.palette_index = random.randint(0, len(self.palettes) - 1)
+        self.palette_index = max(0, min(palette_index, len(self.palettes) - 1))
 
     @property
     def palette(self):
@@ -71,6 +94,11 @@ class MandalaParams:
         if key == 'i': self.phase_a += CHANGE_AMOUNT * 3; return 'phase_a', +1
         if key == 'k': self.phase_a -= CHANGE_AMOUNT * 3; return 'phase_a', -1
         if key == 'p': self.palette_index = (self.palette_index + 1) % len(self.palettes); return 'palette', +1
+        if key in '12345678':
+            self.palette_index = int(key) - 1
+            return 'palette', 0
+        if key == 'h':
+            return 'help', None
         return None, None
 
 def generate_frame(params, frame_count):
@@ -102,13 +130,13 @@ def render_frame(prev, curr, colors):
         for x in range(WIDTH):
             if curr[y][x] != prev[y][x]:
                 r, g, b = colors[y][x]
-                sys.stdout.write(f"\033[{y+1};{x+1}H\033[38;2;{r};{g};{b}m{curr[y][x]}")
+                sys.stdout.write(f"\033[{y+2};{x+1}H\033[38;2;{r};{g};{b}m{curr[y][x]}")
                 prev[y][x] = curr[y][x]
     sys.stdout.write("\033[0m")
     sys.stdout.flush()
 
 def display_settings(params, active_param):
-    sys.stdout.write(f"\033[{HEIGHT+1};1H\033[0m")
+    sys.stdout.write(f"\033[{HEIGHT+2};1H\033[0m")
     sys.stdout.write(
         f"🎛 freq_r={params.freq_r:.2f} freq_a={params.freq_a:.2f} "
         f"phase_r={params.phase_r:.2f} phase_a={params.phase_a:.2f} "
@@ -116,10 +144,13 @@ def display_settings(params, active_param):
         f"palette={params.palette_index + 1}/{len(params.palettes)} "
         f"→ animating: {active_param or 'none'}"
     )
+    palette_preview = ''.join(params.palette)
+    sys.stdout.write(f"\n🧵 Palette: {palette_preview}")
     sys.stdout.flush()
 
 def main():
-    params = MandalaParams()
+    show_controls_inline()
+    params = MandalaParams(palette_index=args.palette - 1)
     prev_frame = [[' '] * WIDTH for _ in range(HEIGHT)]
     active_param = None
     active_direction = +1
@@ -132,7 +163,9 @@ def main():
                 param, direction = params.mutate(key)
                 if param == 'quit':
                     break
-                if param:
+                elif param == 'help':
+                    show_controls_inline()
+                elif param:
                     active_param = param
                     active_direction = direction
 
