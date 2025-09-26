@@ -78,10 +78,12 @@ class MandalaParams:
             [' ', '⎯', '⎼', '⎻', '﹏', '╌', '╍', '╏', '╎', '╳']
         ]
         self.palette_index = max(0, min(palette_index, len(self.palettes) - 1))
+        self.transition_frames = 0
+        self.target_palette_index = self.palette_index
 
     @property
     def palette(self):
-        return self.palettes[self.palette_index]
+        return self.get_blended_palette()
 
     def mutate(self, key):
         if key == 'q': return 'quit', None
@@ -95,11 +97,25 @@ class MandalaParams:
         if key == 'k': self.phase_a -= CHANGE_AMOUNT * 3; return 'phase_a', -1
         if key == 'p': self.palette_index = (self.palette_index + 1) % len(self.palettes); return 'palette', +1
         if key in '12345678':
-            self.palette_index = int(key) - 1
+            self.target_palette_index = int(key) - 1
+            self.transition_frames = 30  # Palette transition over 30 frames
             return 'palette', 0
         if key == 'h':
             return 'help', None
         return None, None
+
+    def get_blended_palette(self):
+        if self.transition_frames == 0:
+            return self.palettes[self.palette_index]
+        src = self.palettes[self.palette_index]
+        tgt = self.palettes[self.target_palette_index]
+        blend = []
+        for a, b in zip(src, tgt):
+            blend.append(b if self.transition_frames < 10 else a)
+        self.transition_frames -= 1
+        if self.transition_frames == 0:
+            self.palette_index = self.target_palette_index
+        return blend
 
 def generate_frame(params, frame_count):
     center_x = WIDTH // 2
@@ -166,8 +182,9 @@ def main():
                 elif param == 'help':
                     show_controls_inline()
                 elif param:
-                    active_param = param
-                    active_direction = direction
+                    if param != 'palette':  # prevent palette from being animated
+                        active_param = param
+                        active_direction = direction
 
             # Animate active parameter
             delta = CHANGE_AMOUNT * active_direction
