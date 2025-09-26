@@ -37,4 +37,3 @@ if not defined PYTHON_CMD (
     set PYTHON_CMD=python
 )
 %PYTHON_CMD% SSHHosts.py
-pause

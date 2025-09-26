@@ -48,11 +48,11 @@ def test_basic_functionality():
         print("✓ Empty string validation works")
     else:
         print("✗ Empty string validation failed")
-    
-    if not SSHHosts.test_empty_string("valid", "test"):
-        print("✓ Non-empty string validation works")
-    else:
+
+    if SSHHosts.test_empty_string("valid", "test"):
         print("✗ Non-empty string validation failed")
+    else:
+        print("✓ Non-empty string validation works")
     
     print("\nBasic functionality test completed!")
 
