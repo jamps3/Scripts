@@ -10,7 +10,17 @@ This directory contains scripts and utilities for working with [yt-dlp](https://
 
 ## Details
 
-### dl.cmd:
+### dl.cmd: Simple Windows CMD version
+
+### dl.py: Simple YouTube downloader with destination directory and quality parameters
+
+### yt_format_picker.py: Pick the format to download from the specified formats list
+
+### yt_picker.py: Pick the format from the YouTube offered list
+
+### yt_picker_prompt_toolkit.py: Use prompt_toolkit for the menu
+
+### yt_picker_final.py: Final version with everything
 
 ## Usage
 
