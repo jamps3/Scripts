@@ -1,3 +1,35 @@
+"""
+ASCII Mandala Generator — Terminal-based animated art engine.
+
+This script renders dynamic, colorized ASCII mandalas directly in the terminal.
+It supports real-time parameter control via keyboard input, including frequency,
+phase, palette selection, animation speed, and frame capture.
+
+Features:
+- Live animation with smooth transitions and color shifting
+- Interactive controls for geometry and palette
+- Freeze/unfreeze toggle and frame capture as PNG
+- Full animation export as GIF
+- Cross-platform support (Windows, Linux, macOS)
+
+Usage:
+    python ascii_mandala.py [width] [height] [fps] [frames] [palette] [change_count] [change_amount]
+
+Example:
+    python ascii_mandala.py 120 40 60 5000 6 2 0.2
+
+Controls:
+    w/s = freq_r ±       a/d = freq_a ±
+    i/k = phase_a ±      j/l = phase_r ±
+    p   = next palette   1–8 = select palette
+    r   = randomize all  space = freeze/unfreeze
+    f   = save PNG       x = export GIF
+    +/– = speed control  h = show help
+    q   = quit
+
+Designed for expressive terminal art and joyful experimentation.
+"""
+
 import math, random, sys, time, argparse, platform
 
 # OS detection
@@ -9,8 +41,8 @@ else:
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("width", type=int, nargs="?", default=360, help="Width in characters")
-parser.add_argument("height", type=int, nargs="?", default=92, help="Height in characters")
+parser.add_argument("width", type=int, nargs="?", default=190, help="Width in characters")
+parser.add_argument("height", type=int, nargs="?", default=60, help="Height in characters")
 parser.add_argument("fps", type=int, nargs="?", default=60, help="Frames per second")
 parser.add_argument("frames", type=int, nargs="?", default=10000, help="Total frames to display")
 parser.add_argument("palette", type=int, nargs="?", default=0, help="Palette index (1–8)")
@@ -20,8 +52,12 @@ args = parser.parse_args()
 
 WIDTH, HEIGHT = args.width, args.height
 FPS, FRAMES = args.fps, args.frames
-CHANGE_COUNT, CHANGE_AMOUNT = args.change_count, args.change_amount
+CHANGE_COUNT = args.change_count
+CHANGE_AMOUNT = [args.change_amount]  # wrap in list
 DELAY = 1.0 / FPS
+recording_gif = [False]  # wrapped in list for mutability
+gif_frames = [] # For storing frames for GIF export
+font_name = "fonts/lucon.ttf"
 
 # Terminal setup
 if not IS_WINDOWS:
@@ -37,25 +73,10 @@ def get_key():
         dr, _, _ = select.select([sys.stdin], [], [], 0)
         return sys.stdin.read(1) if dr else None
 
-def show_controls():
-    controls = [
-        "🎮 Controls:",
-        "  w/s → freq_r ±",
-        "  a/d → freq_a ±",
-        "  i/k → phase_a ±",
-        "  j/l → phase_r ±",
-        "  p   → next palette",
-        "  q   → quit",
-        ""
-    ]
-    for i, line in enumerate(controls):
-        sys.stdout.write(f"\033[{i+1};1H\033[0m{line}")
-    sys.stdout.flush()
-
 def show_controls_inline():
     sys.stdout.write("\033[1;1H\033[2K\033[0m")  # Clear line 1
     sys.stdout.write(
-        "🎮 w/s=freq_r a/d=freq_a i/k=phase_a j/l=phase_r p=next_palette 1–8=select_palette h=help q=quit"
+        "🎮 w/s=freq_r a/d=freq_a i/k=phase_a j/l=phase_r p=next_palette 1–8=select_palette r=randomize space=freeze +/–=speed h=help q=quit f=capture_frame c=toggle capture x=export_gif"
     )
     sys.stdout.flush()
 
@@ -86,20 +107,35 @@ class MandalaParams:
         return self.get_blended_palette()
 
     def mutate(self, key):
+        if key == ' ':
+            return 'toggle_freeze', None
         if key == 'q': return 'quit', None
-        if key == 'w': self.freq_r += CHANGE_AMOUNT; return 'freq_r', +1
-        if key == 's': self.freq_r -= CHANGE_AMOUNT; return 'freq_r', -1
-        if key == 'a': self.freq_a -= CHANGE_AMOUNT * 2; return 'freq_a', -1
-        if key == 'd': self.freq_a += CHANGE_AMOUNT * 2; return 'freq_a', +1
-        if key == 'j': self.phase_r += CHANGE_AMOUNT * 3; return 'phase_r', +1
-        if key == 'l': self.phase_r -= CHANGE_AMOUNT * 3; return 'phase_r', -1
-        if key == 'i': self.phase_a += CHANGE_AMOUNT * 3; return 'phase_a', +1
-        if key == 'k': self.phase_a -= CHANGE_AMOUNT * 3; return 'phase_a', -1
+        if key == 'w': self.freq_r += CHANGE_AMOUNT[0]; return 'freq_r', +1
+        if key == 's': self.freq_r -= CHANGE_AMOUNT[0]; return 'freq_r', -1
+        if key == 'a': self.freq_a -= CHANGE_AMOUNT[0] * 2; return 'freq_a', -1
+        if key == 'd': self.freq_a += CHANGE_AMOUNT[0] * 2; return 'freq_a', +1
+        if key == 'j': self.phase_r += CHANGE_AMOUNT[0] * 3; return 'phase_r', +1
+        if key == 'l': self.phase_r -= CHANGE_AMOUNT[0] * 3; return 'phase_r', -1
+        if key == 'i': self.phase_a += CHANGE_AMOUNT[0] * 3; return 'phase_a', +1
+        if key == 'k': self.phase_a -= CHANGE_AMOUNT[0] * 3; return 'phase_a', -1
         if key == 'p': self.palette_index = (self.palette_index + 1) % len(self.palettes); return 'palette', +1
+        if key == 'f':
+            return 'freeze_capture', None
+        if key == 'c':
+            return 'toggle_capture', None
+        if key == 'x':
+            return 'export_gif', None
+        if key == 'r':
+            self.randomize()
+            return 'randomize', None
         if key in '12345678':
             self.target_palette_index = int(key) - 1
             self.transition_frames = 30  # Palette transition over 30 frames
             return 'palette', 0
+        if key == '+':
+            return 'speed_up', None
+        if key == '-':
+            return 'slow_down', None
         if key == 'h':
             return 'help', None
         return None, None
@@ -116,8 +152,35 @@ class MandalaParams:
         if self.transition_frames == 0:
             self.palette_index = self.target_palette_index
         return blend
+    
+    def randomize(self):
+        self.freq_r = random.uniform(0.1, 1.5)
+        self.freq_a = random.uniform(1.0, 6.0)
+        self.phase_r = random.uniform(0, math.pi * 2)
+        self.phase_a = random.uniform(0, math.pi * 2)
+        self.offset_x = random.randint(-5, 5)
+        self.offset_y = random.randint(-5, 5)
+        # self.target_palette_index = random.randint(0, len(self.palettes) - 1)
+        self.transition_frames = 30
 
 def generate_frame(params, frame_count):
+    """
+    Generates a single ASCII mandala frame and its corresponding RGB color matrix.
+
+    Args:
+        params (MandalaParams): Current mandala parameters including frequencies, phases, offsets, and palette.
+        frame_count (int): Frame number used for animation and color shifting.
+
+    Returns:
+        tuple:
+            frame (list[list[str]]): 2D grid of ASCII characters for each position.
+            color (list[list[tuple[int, int, int]]]): 2D grid of RGB tuples for each character position.
+
+    The function computes each cell's value using polar coordinates and trigonometric transformations,
+    maps the result to a character from the current palette, and generates a corresponding RGB color
+    for dynamic, animated rendering.
+    """
+
     center_x = WIDTH // 2
     center_y = HEIGHT // 2
     hue_shift = frame_count * 2
@@ -151,17 +214,76 @@ def render_frame(prev, curr, colors):
     sys.stdout.write("\033[0m")
     sys.stdout.flush()
 
-def display_settings(params, active_param):
-    sys.stdout.write(f"\033[{HEIGHT+2};1H\033[0m")
+from PIL import Image, ImageDraw, ImageFont
+
+def save_frame_as_png(frame, colors, filename="mandala_capture.png"):
+    char_width, char_height = 10, 18  # adjust for font size
+    img_width = WIDTH * char_width
+    img_height = HEIGHT * char_height
+    image = Image.new("RGB", (img_width, img_height), (0, 0, 0))
+    draw = ImageDraw.Draw(image)
+
+    try:
+        font = ImageFont.truetype(font_name, 14)
+    except:
+        font = ImageFont.load_default()
+    print("Font: ", font.getname(), file=sys.stderr)
+
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            ch = frame[y][x]
+            r, g, b = colors[y][x]
+            draw.text((x * char_width, y * char_height), ch, fill=(r, g, b), font=font)
+
+    image.save(filename)
+
+def capture_frame_for_gif(frame, colors):
+    from PIL import Image, ImageDraw, ImageFont
+    char_width, char_height = 10, 18
+    img = Image.new("RGB", (WIDTH * char_width, HEIGHT * char_height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype(font_name, 14)
+    except:
+        font = ImageFont.load_default()
+
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            ch = frame[y][x]
+            r, g, b = colors[y][x]
+            draw.text((x * char_width, y * char_height), ch, fill=(r, g, b), font=font)
+
+    gif_frames.append(img)
+
+def export_gif():
+    if not gif_frames:
+        return
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    filename = f"mandala_{timestamp}.gif"
+    gif_frames[0].save(
+        filename,
+        save_all=True,
+        append_images=gif_frames[1:],
+        duration=int(DELAY * 1000),
+        loop=0
+    )
+    gif_frames.clear()
+
+# --- Display currently used settings ---
+def display_settings(params, active_param, frozen, recording_gif):
+    sys.stdout.write(f"\033[{HEIGHT+3};1H\033[2K\033[0m")  # Clear line below settings
     sys.stdout.write(
         f"🎛 freq_r={params.freq_r:.2f} freq_a={params.freq_a:.2f} "
         f"phase_r={params.phase_r:.2f} phase_a={params.phase_a:.2f} "
         f"offset_x={params.offset_x} offset_y={params.offset_y} "
         f"palette={params.palette_index + 1}/{len(params.palettes)} "
-        f"→ animating: {active_param or 'none'}"
+        f"→ animating: {active_param or 'none'} speed={CHANGE_AMOUNT[0]:.3f}"
     )
+    frozen_text = "⏸ frozen" if frozen else "▶ running"
     palette_preview = ''.join(params.palette)
-    sys.stdout.write(f"\n🧵 Palette: {palette_preview}")
+    recording_text = "🎥 recording" if recording_gif[0] else "⏹ not recording"
+    sys.stdout.write(f"\033[{HEIGHT+2};1H\033[2K\033[0m")  # Clear line below settings
+    sys.stdout.write(f"🧵 Palette: {palette_preview}  {frozen_text} {recording_text}")
     sys.stdout.flush()
 
 def main():
@@ -169,36 +291,63 @@ def main():
     params = MandalaParams(palette_index=args.palette - 1)
     prev_frame = [[' '] * WIDTH for _ in range(HEIGHT)]
     active_param = None
-    active_direction = +1
+    active_direction = 0  # no animation until a key sets it
     frame_count = 0
+    frozen = True  # Start frozen until user interaction
 
     try:
+        start_time = time.time()  # Timer: count how long this function takes to execute
         for _ in range(FRAMES):
             key = get_key()
             if key:
                 param, direction = params.mutate(key)
-                if param == 'quit':
+                if param == 'toggle_freeze':
+                    frozen = not frozen
+                    if frozen:
+                        active_param = None
+                        active_direction = 0
+                elif param == 'speed_up':
+                    CHANGE_AMOUNT[0] *= 1.2
+                elif param == 'slow_down':
+                    CHANGE_AMOUNT[0] /= 1.2
+                elif param == 'freeze_capture':
+                    import datetime
+                    filename = f"mandala_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                    save_frame_as_png(curr_frame, colors, filename)
+                elif param == 'toggle_capture':
+                    recording_gif[0] = not recording_gif[0]
+                elif param == 'export_gif':
+                    capture_frame_for_gif(curr_frame, colors)
+                    export_gif()
+                elif param == 'quit':
                     break
                 elif param == 'help':
                     show_controls_inline()
                 elif param:
-                    if param != 'palette':  # prevent palette from being animated
+                    if param not in ['palette', 'randomize']:  # prevent palette and randomize from being animated
                         active_param = param
                         active_direction = direction
 
-            # Animate active parameter
-            delta = CHANGE_AMOUNT * active_direction
-            if active_param == 'freq_r': params.freq_r += delta
-            elif active_param == 'freq_a': params.freq_a += delta * 2
-            elif active_param == 'phase_r': params.phase_r += delta * 3
-            elif active_param == 'phase_a': params.phase_a += delta * 3
-            elif active_param == 'offset_x': params.offset_x += int(delta * 10)
-            elif active_param == 'offset_y': params.offset_y += int(delta * 10)
+            # Animate active parameters when not frozen
+            if not frozen and active_param and active_direction:
+                delta = CHANGE_AMOUNT[0] * active_direction
+                if active_param == 'freq_r': params.freq_r += delta
+                elif active_param == 'freq_a': params.freq_a += delta * 2
+                elif active_param == 'phase_r': params.phase_r += delta * 3
+                elif active_param == 'phase_a': params.phase_a += delta * 3
+                elif active_param == 'offset_x': params.offset_x += int(delta * 10)
+                elif active_param == 'offset_y': params.offset_y += int(delta * 10)
 
             curr_frame, colors = generate_frame(params, frame_count)
+            display_settings(params, active_param, frozen, recording_gif)
             render_frame(prev_frame, curr_frame, colors)
-            display_settings(params, active_param)
-            time.sleep(DELAY)
+            if recording_gif[0]:
+                capture_frame_for_gif(curr_frame, colors)
+            sleep_time = max(0, DELAY - (time.time() - start_time))  # Adjust sleep to maintain consistent FPS. Ensure sleep time is non-negative.
+            time.sleep(sleep_time)
+            start_time = time.time()  # Reset timer for next frame
+            sys.stdout.write(f"\033[{HEIGHT+4};1H\033[2KFrame time left: {sleep_time:.4f}s")
+            sys.stdout.flush()
             frame_count += 1
     except KeyboardInterrupt:
         pass

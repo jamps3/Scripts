@@ -1,3 +1,7 @@
+# Mandala captures
+*.png
+*.gif
+
 # Python cache files and directories
 __pycache__/
 *.py[cod]
