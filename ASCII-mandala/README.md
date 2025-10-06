@@ -14,6 +14,11 @@ phase, palette selection, animation speed, and frame capture.
 - Animation export as PNG sequence
 - Cross-platform support (Windows, Linux, macOS)
 
+## Exported video
+<video src="animation.mp4" autoplay loop muted playsinline controls width="640">
+  Your browser does not support the video tag.
+</video>
+
 ## Usage:
     python ascii_mandala.py [width] [height] [fps] [frames] [palette] [change_count] [change_amount]
 
