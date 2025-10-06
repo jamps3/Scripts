@@ -3,10 +3,11 @@
 ![License](https://img.shields.io/badge/License-MIT-green?logo=open-source-initiative)
 ![Build](https://img.shields.io/badge/Build-Stable-brightgreen?logo=check-circle)
 
-<img src="https://github.com/jamps3/Scripts/blob/master/sleep_timer/feather.png" alt="Feather Icon" width="100"></img>
-# Windows sleep timer utility with GUI
+# <img src="feather.png" alt="Feather Badge" width="80" style="vertical-align: middle;"> Windows sleep timer utility with GUI
 
-User-friendly sleep timer for Windows. Choose your delay, watch the countdown, and drift into sleep—with a feather-light touch.
+User-friendly sleep timer for Windows.
+
+Choose your delay, watch the countdown, and drift computer into sleep — with a feather-light touch.
 
 ---
 
