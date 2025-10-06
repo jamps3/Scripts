@@ -1,6 +1,7 @@
 # Scripts
 
 ## [ASCII-mandala/](https://github.com/jamps3/Scripts/tree/master/ASCII-mandala) ASCII Mandala
+![ASCII-mandala screenshot](https://github.com/jamps3/Scripts/blob/master/ASCII-mandala/screenshot.png)
 ## [server-migration/](https://github.com/jamps3/Scripts/tree/master/server-migration) Linux server migration tools
 ## [sleep_timer/](https://github.com/jamps3/Scripts/tree/master/sleep_timer) Windows sleep timer with GUI
 ![sleep_timer screenshot](https://github.com/jamps3/Scripts/blob/master/sleep_timer/screenshot.png)
