@@ -322,7 +322,7 @@ def save_frame_as_png(frame, colors, font_path, filename="mandala_capture.png"):
 
     image.save(filename)
 
-def save_frame_as_png_sequence(frame, colors, frame_index, font_path, output_dir="frames"):
+def save_frame_as_png_sequence(frame, colors, font_path, output_dir="frames"):
     char_width, char_height = 10, 18
     img = Image.new("RGB", (WIDTH * char_width, HEIGHT * char_height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -343,10 +343,8 @@ def save_frame_as_png_sequence(frame, colors, frame_index, font_path, output_dir
     for i, img in enumerate(frames):
         filename = os.path.join(output_dir, f"frame_{i:04d}.png")
         img.save(filename)
-    
-    print(f"✅ Saved {len(frames)} frames as PNG sequence in '{output_dir}'")
 
-def capture_frame(frame, colors, font_path):
+def capture_frame(frame, colors, font_path, palette):
     from PIL import Image, ImageDraw, ImageFont
     char_width, char_height = 10, 18
     img = Image.new("RGB", (WIDTH * char_width, HEIGHT * char_height), (0, 0, 0))
@@ -355,7 +353,7 @@ def capture_frame(frame, colors, font_path):
         font = ImageFont.truetype(font_path, 14)
     except:
         font = ImageFont.load_default()
-
+    
     for y in range(HEIGHT):
         for x in range(WIDTH):
             ch = frame[y][x]
@@ -370,7 +368,7 @@ def export_gif():
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"mandala_{timestamp}.gif"  # Timestamped filename
     duration_ms = max(1, int(round(1000 / FPS)))  # 1 ms minimum
-    frames[0].save(
+    """ frames[0].save(
         filename,  # output filename
         save_all=True,  # Save all frames
         append_images=frames[1:],   # Append all captured frames
@@ -378,6 +376,20 @@ def export_gif():
         loop=0,  # Loop forever
         optimize=False,  # Optimize GIF size (rendering), disabled because it loses quality
         transparency=0  # Set transparency color index
+    ) """
+    paletted_frames = []
+    for img in frames:
+        paletted = img.convert("P", palette=Image.ADAPTIVE, colors=256)
+        paletted_frames.append(paletted)
+
+    paletted_frames[0].save(
+        filename,
+        save_all=True,
+        append_images=paletted_frames[1:],
+        duration=duration_ms,
+        loop=0,
+        optimize=False,
+        transparency=0
     )
     frames.clear()
 
@@ -461,7 +473,7 @@ def main():
             display_settings(params, active_param, frozen, recording)
             render_frame(prev_frame, curr_frame, colors)
             if recording[0]:
-                capture_frame(curr_frame, colors, font_path=params.font_name)
+                capture_frame(curr_frame, colors, font_path=best_font_path, palette=params.palette)
             sleep_time = max(0, DELAY - (time.time() - start_time))  # Adjust sleep to maintain consistent FPS. Ensure sleep time is non-negative.
             time.sleep(sleep_time)
             # start_time = time.time()  # Reset timer for next frame
