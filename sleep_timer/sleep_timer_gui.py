@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import threading
 import time
 import subprocess
+import datetime
 
 class SleepTimerApp:
     def __init__(self, root):
@@ -57,6 +58,8 @@ class SleepTimerApp:
 
     def run_countdown(self, minutes):
         total_seconds = int(minutes * 60)
+        self.sleep_start_time = datetime.datetime.now()
+
         for remaining in range(total_seconds, 0, -1):
             if self.abort_flag:
                 return
@@ -66,6 +69,18 @@ class SleepTimerApp:
 
         self.status.config(text="💤 Sleeping now...")
         subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
+
+        # After sleep returns
+        self.root.after(1000, self.report_sleep_duration)
+
+    def report_sleep_duration(self):
+        wake_time = datetime.datetime.now()
+        slept_for = wake_time - self.sleep_start_time
+        minutes_slept = slept_for.total_seconds() / 60
+
+        self.status.config(text=f"🌅 Welcome back! Slept for ~{minutes_slept:.1f} min.")
+        self.abort_button.config(state="disabled")
+        self.start_button.config(state="normal")
 
 if __name__ == "__main__":
     root = tk.Tk()
