@@ -2,6 +2,44 @@ import subprocess
 import re
 import urllib.parse
 import time
+import sys
+import platform
+
+# List of required libraries for all platforms
+required_libraries = [
+    ("prompt_toolkit", "prompt_toolkit"),
+    ("yt_dlp", "yt_dlp"),
+]
+
+# --- Install missing libraries ---
+def install_missing_libraries():
+    # Install common libraries
+    for import_name, package_name in required_libraries:
+        try:
+            __import__(import_name)
+        except ImportError:
+            print(f"⚠️ Missing library: {package_name}. Installing now...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+    # Check the platform and install platform-specific libraries
+    if platform.system() == "Windows":
+        # Install windows-curses for Windows
+        try:
+            __import__("curses")
+        except ImportError:
+            print("⚠️ Missing 'curses' library on Windows. Installing 'windows-curses'...")
+            subprocess.check_call([subprocess.sys.executable, "-m", "pip", "install", "windows-curses"])
+
+    elif platform.system() == "Linux":
+        try:
+            __import__("curses")
+        except ImportError:
+            print("⚠️ Missing 'curses' library on Linux. Installing necessary libraries...")
+            subprocess.check_call([subprocess.sys.executable, "-m", "pip", "install", "curses"])
+
+# Install missing libraries before running the main program
+install_missing_libraries()
+
 from prompt_toolkit import prompt
 from prompt_toolkit.shortcuts import radiolist_dialog
 from prompt_toolkit.styles import Style
