@@ -431,13 +431,13 @@ def main():
                 elif param == 'freeze_capture':
                     import datetime
                     filename = f"mandala_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                    save_frame_as_png(curr_frame, colors, params.font_name, filename)
+                    save_frame_as_png(curr_frame, colors, best_font_path, filename)
                 elif param == 'toggle_capture':
                     recording[0] = not recording[0]
                 elif param == 'export_gif':
                     export_gif()
                 elif param == 'export_png_sequence':
-                    save_frame_as_png_sequence(curr_frame, colors, frame_count, params.font_name)
+                    save_frame_as_png_sequence(curr_frame, colors, frame_count, best_font_path)
                 elif param == 'quit':
                     break
                 elif param == 'help':
