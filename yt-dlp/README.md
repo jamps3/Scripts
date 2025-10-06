@@ -4,29 +4,30 @@ This directory contains scripts and utilities for working with [yt-dlp](https://
 
 ## Contents
 
-- Shell and batch scripts for automating yt-dlp tasks
+- Scripts for automating yt-dlp tasks
 - Configuration examples for common use cases
-- Helper tools to simplify downloads
 
 ## Details
 
+### dl.py: Simple Python YouTube downloader with destination directory and quality parameters
 ### dl.cmd: Simple Windows CMD version
-
-### dl.py: Simple YouTube downloader with destination directory and quality parameters
-
-### yt_format_picker.py: Pick the format to download from the specified formats list
-
-### yt_picker.py: Pick the format from the YouTube offered list
-
-### yt_picker_prompt_toolkit.py: Use prompt_toolkit for the menu
-
-### yt_picker_final.py: Final version with everything
+### ytdl.py: Python yt-dlp downloader with a menu interface to select the format(s)
 
 ## Usage
 
-1. Ensure [yt-dlp](https://github.com/yt-dlp/yt-dlp) is installed.
-2. Review the script headers for usage instructions.
-3. Run scripts from the command line as needed.
+1. Ensure [yt-dlp](https://github.com/yt-dlp/yt-dlp) is installed. The ytdl.py script checks for required dependencies and installs yt-dlp if not found.
+2. Run the script:
+
+```bash
+python ytdl.py
+```
+
+3. Screenshots
+
+![ytdl.py screenshot](https://github.com/jamps3/Scripts/blob/master/yt-dlp/ytdl.png)
+![ytdl.py screenshot 2](https://github.com/jamps3/Scripts/blob/master/yt-dlp/ytdl_2.png)
+
+# Streaming YouTube in VLC
 
 ## Forcing 4K resolution playback in VLC
 
