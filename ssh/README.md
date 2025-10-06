@@ -1,6 +1,11 @@
 # SSH Management Scripts (Python/PowerShell)
 
-This repository contains Python and PowerShell scripts for SSH connection management and server migration tasks.
+This repository contains Python and PowerShell scripts for optionally passwordless SSH connection management.
+
+## SSHHosts.py - SSH Connection Setup, Python version
+
+![SSHHosts.py screenshot 1](https://github.com/jamps3/Scripts/blob/master/ssh/SSHHosts.png)
+![SSHHosts.py screenshot 2](https://github.com/jamps3/Scripts/blob/master/ssh/SSHHosts_2.png)
 
 ## Add-SSHHost.ps1 - SSH Connection Setup
 
@@ -94,7 +99,5 @@ Use 'ssh <alias>' to connect to any host.
 
 Press any key to continue...
 ```
-
-## SSHHosts.py - SSH Connection Setup, Python version
 
 =======
