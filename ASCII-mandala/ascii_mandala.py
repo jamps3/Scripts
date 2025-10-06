@@ -8,8 +8,10 @@ phase, palette selection, animation speed, and frame capture.
 Features:
 - Live animation with smooth transitions and color shifting
 - Interactive controls for geometry and palette
-- Freeze/unfreeze toggle and frame capture as PNG
-- Full animation export as GIF
+- Freeze/unfreeze toggle
+- Frame capture as PNG
+- Animation export as GIF
+- Animation export as PNG sequence
 - Cross-platform support (Windows, Linux, macOS)
 
 Usage:
@@ -25,7 +27,7 @@ Controls:
     r   = randomize all  space = freeze/unfreeze
     f   = save PNG       x = export GIF
     +/– = speed control  h = show help
-    q   = quit
+    q   = quit           v = export PNG sequence
 
 Designed for expressive terminal art and joyful experimentation.
 """
