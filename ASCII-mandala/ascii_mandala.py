@@ -31,6 +31,34 @@ Designed for expressive terminal art and joyful experimentation.
 """
 
 import math, random, sys, os, time, argparse, platform
+import subprocess
+import sys
+import platform
+
+# List of required libraries for all platforms
+required_libraries = [
+    ("PIL", "Pillow"),
+    ("fontTools", "fonttools"),
+]
+
+# --- Install missing libraries ---
+def install_missing_libraries():
+    # Install common libraries
+    for import_name, package_name in required_libraries:
+        try:
+            __import__(import_name)
+        except ImportError:
+            print(f"⚠️ Missing library: {package_name}. Installing now...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package_name])
+
+    # Platform-specific libraries
+    #if platform.system() == "Windows":
+    #elif platform.system() == "Linux":
+
+# Install missing libraries before running the main program
+install_missing_libraries()
+
+# Now import the libraries (they should be installed now)
 from PIL import ImageFont
 from fontTools.ttLib import TTFont
 
@@ -43,9 +71,9 @@ else:
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("width", type=int, nargs="?", default=95, help="Width in characters")
-parser.add_argument("height", type=int, nargs="?", default=30, help="Height in characters")
-parser.add_argument("fps", type=int, nargs="?", default=60, help="Frames per second")
+parser.add_argument("width", type=int, nargs="?", default=120, help="Width in characters")
+parser.add_argument("height", type=int, nargs="?", default=24, help="Height in characters")
+parser.add_argument("fps", type=int, nargs="?", default=50, help="Frames per second")
 parser.add_argument("frames", type=int, nargs="?", default=10000, help="Total frames to display")
 parser.add_argument("palette", type=int, nargs="?", default=0, help="Palette index (1–8)")
 parser.add_argument("change_count", type=int, nargs="?", default=1, help="Number of parameters to change simultaneously")
@@ -57,8 +85,8 @@ FPS, FRAMES = args.fps, args.frames
 CHANGE_COUNT = args.change_count
 CHANGE_AMOUNT = [args.change_amount]  # wrap in list
 DELAY = 1.0 / FPS
-recording_gif = [False]  # wrapped in list for mutability
-gif_frames = [] # For storing frames for GIF export
+recording = [False]  # wrapped in list for mutability
+frames = [] # For storing animation frames for export
 
 # Terminal setup
 if not IS_WINDOWS:
@@ -77,8 +105,9 @@ def get_key():
 def show_controls_inline():
     sys.stdout.write("\033[1;1H\033[2K\033[0m")  # Clear line 1
     sys.stdout.write(
-        "🎮 w/s=freq_r a/d=freq_a i/k=phase_a j/l=phase_r p=next_palette 1–8=select_palette r=randomize space=freeze +/–=speed h=help q=quit f=capture_frame c=toggle capture x=export_gif"
+        "🎮 w/s=freq_r a/d=freq_a i/k=phase_a j/l=phase_r p=next_palette 1–8=select_palette r=randomize space=freeze"
     )
+    sys.stdout.write("\n+/–=speed h=help q=quit f=export PNG c=toggle capture x=export GIF v=export PNG sequence")
     sys.stdout.flush()
 
 def font_has_glyph(font_path, ch):
@@ -86,34 +115,45 @@ def font_has_glyph(font_path, ch):
         font = TTFont(font_path)
         for table in font['cmap'].tables:
             if ord(ch) in table.cmap:
-                return True
-    except:
+                return True  # Found the glyph
+    except Exception:
         pass
     return False
 
 def find_best_font(palettes, font_dir="fonts"):
-    # Hae kaikki .ttf ja .otf fontit
+    # Etsii fonts-kansiosta fontin, joka tukee eniten annettuja merkkejä kaikista paleteista
     font_candidates = [
         os.path.join(font_dir, f)
         for f in os.listdir(font_dir)
-        if f.lower().endswith((".ttf", ".otf"))
+        if f.lower().endswith((".ttf", ".otf"))  # Hae kaikki .ttf ja .otf fontit
     ]
 
     best_font = None
     max_supported = -1
 
+    print("Tarkistetaan fonttien symbolitukea...")
+
     for font_path in font_candidates:
+        try:
+            font = TTFont(font_path)
+        except Exception as e:
+            print(f"⚠️ Virhe ladattaessa fonttia {font_path}: {e}")
+            continue
+
         supported = 0
-        for ch in palettes:
-            if ch == ' ' or font_has_glyph(font_path, ch):
-                supported += 1
-        print(f"🔍 {os.path.basename(font_path)} tukee {supported}/{len(palettes)} merkkiä")
+        for palette_line in palettes:
+            for ch in palette_line:
+                if ch == ' ' or font_has_glyph(font_path, ch):
+                    supported += 1
+        # Laske palettes kaikki merkit
+        total_chars = sum(len(line) for line in palettes)
+        print(f"🔍 {os.path.basename(font_path)} tukee {supported}/{total_chars} merkkiä")
         if supported > max_supported:
             max_supported = supported
             best_font = font_path
 
     if best_font:
-        print(f"\n✅ Paras fontti: {os.path.basename(best_font)} ({max_supported}/{len(palettes)} merkkiä tuettu)")
+        print(f"\n✅ Paras fontti: {os.path.basename(best_font)} ({max_supported}/{total_chars} merkkiä tuettu)")
     else:
         print("❌ Yksikään fontti ei tue annettuja merkkejä")
 
@@ -134,7 +174,7 @@ class MandalaParams:
             [' ', '·', '•', '*', '¤', '°', '○', '●', '◎', '■'],
             [' ', '˙', '⁕', '✦', '✧', '✶', '✷', '✸', '✺', '✹'],
             [' ', '·', '•', '◦', '○', '◉', '◎', '◍', '◯', '⬤'],
-            [' ', '░', '▒', '▓', '▙', '▛', '▜', '▟', '█', '🟥'],
+            [' ', '░', '▒', '▓', '▙', '▛', '▜', '▟', '█', '■'],
             [' ', '⎯', '⎼', '⎻', '﹏', '╌', '╍', '╏', '╎', '╳']
         ]
         self.palette_index = max(0, min(palette_index, len(self.palettes) - 1))
@@ -148,9 +188,9 @@ class MandalaParams:
         return self.get_blended_palette()
 
     def mutate(self, key):
-        if key == ' ':
+        if key == ' ':  # Toggle freeze
             return 'toggle_freeze', None
-        if key == 'q': return 'quit', None
+        if key == 'q': return 'quit', None  # Quit program
         if key == 'w': self.freq_r += CHANGE_AMOUNT[0]; return 'freq_r', +1
         if key == 's': self.freq_r -= CHANGE_AMOUNT[0]; return 'freq_r', -1
         if key == 'a': self.freq_a -= CHANGE_AMOUNT[0] * 2; return 'freq_a', -1
@@ -166,6 +206,8 @@ class MandalaParams:
             return 'toggle_capture', None
         if key == 'x':
             return 'export_gif', None
+        if key == 'v':
+            return 'export_png_sequence', None
         if key == 'r':
             self.randomize()
             return 'randomize', None
@@ -246,18 +288,19 @@ def generate_frame(params, frame_count):
     return frame, color
 
 def render_frame(prev, curr, colors):
-    for y in range(HEIGHT):
+    RESERVED_LINES = 1  # Lines reserved for controls and status
+    for y in range(HEIGHT - RESERVED_LINES):
         for x in range(WIDTH):
             if curr[y][x] != prev[y][x]:
                 r, g, b = colors[y][x]
-                sys.stdout.write(f"\033[{y+2};{x+1}H\033[38;2;{r};{g};{b}m{curr[y][x]}")
+                sys.stdout.write(f"\033[{y+3};{x+1}H\033[38;2;{r};{g};{b}m{curr[y][x]}")
                 prev[y][x] = curr[y][x]
     sys.stdout.write("\033[0m")
     sys.stdout.flush()
 
 from PIL import Image, ImageDraw, ImageFont
 
-def save_frame_as_png(frame, colors, filename="mandala_capture.png"):
+def save_frame_as_png(frame, colors, font_path, filename="mandala_capture.png"):
     char_width, char_height = 10, 18  # adjust for font size
     img_width = WIDTH * char_width
     img_height = HEIGHT * char_height
@@ -265,10 +308,9 @@ def save_frame_as_png(frame, colors, filename="mandala_capture.png"):
     draw = ImageDraw.Draw(image)
 
     try:
-        font = ImageFont.truetype(font_name, 14)
+        font = ImageFont.truetype(font_path, 14)
     except:
         font = ImageFont.load_default()
-    # print("Font: ", font.getname(), file=sys.stderr)
 
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -278,13 +320,13 @@ def save_frame_as_png(frame, colors, filename="mandala_capture.png"):
 
     image.save(filename)
 
-def capture_frame_for_gif(frame, colors):
-    from PIL import Image, ImageDraw, ImageFont
+def save_frame_as_png_sequence(frame, colors, frame_index, font_path, output_dir="frames"):
     char_width, char_height = 10, 18
     img = Image.new("RGB", (WIDTH * char_width, HEIGHT * char_height), (0, 0, 0))
     draw = ImageDraw.Draw(img)
+
     try:
-        font = ImageFont.truetype(font_name, 14)
+        font = ImageFont.truetype(font_path, 14)
     except:
         font = ImageFont.load_default()
 
@@ -294,44 +336,68 @@ def capture_frame_for_gif(frame, colors):
             r, g, b = colors[y][x]
             draw.text((x * char_width, y * char_height), ch, fill=(r, g, b), font=font)
 
-    gif_frames.append(img)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for i, img in enumerate(frames):
+        filename = os.path.join(output_dir, f"frame_{i:04d}.png")
+        img.save(filename)
+    
+    print(f"✅ Saved {len(frames)} frames as PNG sequence in '{output_dir}'")
+
+def capture_frame(frame, colors, font_path):
+    from PIL import Image, ImageDraw, ImageFont
+    char_width, char_height = 10, 18
+    img = Image.new("RGB", (WIDTH * char_width, HEIGHT * char_height), (0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype(font_path, 14)
+    except:
+        font = ImageFont.load_default()
+
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            ch = frame[y][x]
+            r, g, b = colors[y][x]
+            draw.text((x * char_width, y * char_height), ch, fill=(r, g, b), font=font)
+
+    frames.append(img)
 
 def export_gif():
-    if not gif_frames:
+    if not frames:
         return
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     filename = f"mandala_{timestamp}.gif"  # Timestamped filename
-    gif_frames[0].save(
+    duration_ms = max(1, int(round(1000 / FPS)))  # 1 ms minimum
+    frames[0].save(
         filename,  # output filename
         save_all=True,  # Save all frames
-        append_images=gif_frames[1:],   # Append all captured frames
-        duration=int(1000 / FPS),  # Duration per frame in ms
+        append_images=frames[1:],   # Append all captured frames
+        duration=duration_ms,  # Duration per frame in ms
         loop=0,  # Loop forever
         optimize=False,  # Optimize GIF size (rendering), disabled because it loses quality
         transparency=0  # Set transparency color index
     )
-    gif_frames.clear()
+    frames.clear()
 
 # --- Display currently used settings ---
-def display_settings(params, active_param, frozen, recording_gif):
+def display_settings(params, active_param, frozen, recording):
     sys.stdout.write(f"\033[{HEIGHT+3};1H\033[2K\033[0m")  # Clear line below settings
     sys.stdout.write(
         f"🎛 freq_r={params.freq_r:.2f} freq_a={params.freq_a:.2f} "
         f"phase_r={params.phase_r:.2f} phase_a={params.phase_a:.2f} "
         f"offset_x={params.offset_x} offset_y={params.offset_y} "
         f"palette={params.palette_index + 1}/{len(params.palettes)} "
-        f"→ animating: {active_param or 'none'} speed={CHANGE_AMOUNT[0]:.3f} font={params.font_name}"
+        f"→ {active_param or 'none'} speed={CHANGE_AMOUNT[0]:.3f}"
     )
     frozen_text = "⏸ frozen" if frozen else "▶ running"
     palette_preview = ''.join(params.palette)
-    recording_text = "🎥 recording" if recording_gif[0] else "⏹ not recording"
-    recording_text += f" ({len(gif_frames)} frames captured)"
+    recording_text = "🎥 recording" if recording[0] else "⏹ not recording"
+    recording_text += f" ({len(frames)} frames captured)"
     sys.stdout.write(f"\033[{HEIGHT+2};1H\033[2K\033[0m")  # Clear line below settings
-    sys.stdout.write(f"🧵 Palette: {palette_preview}  {frozen_text} {recording_text}")
+    sys.stdout.write(f"🧵 Palette: {palette_preview}  {frozen_text} {recording_text} Font: {params.font_name}")
     sys.stdout.flush()
 
 def main():
-    show_controls_inline()
     params = MandalaParams(palette_index=args.palette - 1)
     prev_frame = [[' '] * WIDTH for _ in range(HEIGHT)]
     active_param = None
@@ -339,22 +405,23 @@ def main():
     frame_count = 0
     frozen = True  # Start frozen until user interaction)
     # Select font that supports the most characters in all palettes
-    # best_font_path = find_best_font(params.palettes)
-    # params.font_name = ImageFont.truetype(best_font_path, params.font_size)
-    # params.font = ImageFont.truetype(best_font_path, params.font_size)
-    # params.font_name = os.path.splitext(os.path.basename(best_font_path))[0]
+    best_font_path = find_best_font(params.palettes)
+    input("Press Enter to continue...")  # Wait for a key press before proceeding
+    sys.stdout.write("\033[2J\033[H")  # Clear screen and move cursor to home
+    sys.stdout.flush()
+    # Show controls
+    show_controls_inline()
+    params.font_name = os.path.splitext(os.path.basename(best_font_path))[0]
 
     try:
-        start_time = time.time()  # Timer: count how long this function takes to execute
-        for _ in range(FRAMES):
+        for _ in range(FRAMES):  # Animate for a set number of frames
+            start_time = time.time()  # Timer: count how long this function takes to execute
             key = get_key()
             if key:
                 param, direction = params.mutate(key)
                 if param == 'toggle_freeze':
-                    frozen = not frozen
-                    if frozen:
-                        active_param = None
-                        active_direction = 0
+                    if active_param and active_direction:
+                        frozen = not frozen
                 elif param == 'speed_up':
                     CHANGE_AMOUNT[0] *= 1.2
                 elif param == 'slow_down':
@@ -362,11 +429,13 @@ def main():
                 elif param == 'freeze_capture':
                     import datetime
                     filename = f"mandala_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                    save_frame_as_png(curr_frame, colors, filename)
+                    save_frame_as_png(curr_frame, colors, params.font_name, filename)
                 elif param == 'toggle_capture':
-                    recording_gif[0] = not recording_gif[0]
+                    recording[0] = not recording[0]
                 elif param == 'export_gif':
                     export_gif()
+                elif param == 'export_png_sequence':
+                    save_frame_as_png_sequence(curr_frame, colors, frame_count, params.font_name)
                 elif param == 'quit':
                     break
                 elif param == 'help':
@@ -387,14 +456,15 @@ def main():
                 elif active_param == 'offset_y': params.offset_y += int(delta * 10)
 
             curr_frame, colors = generate_frame(params, frame_count)
-            display_settings(params, active_param, frozen, recording_gif)
+            display_settings(params, active_param, frozen, recording)
             render_frame(prev_frame, curr_frame, colors)
-            if recording_gif[0]:
-                capture_frame_for_gif(curr_frame, colors)
+            if recording[0]:
+                capture_frame(curr_frame, colors, font_path=params.font_name)
             sleep_time = max(0, DELAY - (time.time() - start_time))  # Adjust sleep to maintain consistent FPS. Ensure sleep time is non-negative.
             time.sleep(sleep_time)
-            start_time = time.time()  # Reset timer for next frame
-            sys.stdout.write(f"\033[{HEIGHT+4};1H\033[2KFrame time left: {sleep_time:.4f}s")
+            # start_time = time.time()  # Reset timer for next frame
+            percentleft = int(round((sleep_time / DELAY) * 100))
+            sys.stdout.write(f"\033[{HEIGHT+4};1H\033[2KFrame time left: {percentleft}% - {sleep_time:.4f}s")
             sys.stdout.flush()
             frame_count += 1
     except KeyboardInterrupt:
