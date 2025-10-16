@@ -96,7 +96,7 @@ def fetch_formats(url):
     return formats, audio_only, video_only, progressive
 
 # --- Prompt for format selection ---
-def select_format(formats):
+def select_format(formats, default_id=None):
     choices = [(fmt_id, label) for fmt_id, label, _ in formats]
     tooltips = {fmt_id: tip for fmt_id, _, tip in formats}
 
@@ -114,7 +114,8 @@ def select_format(formats):
         values=choices,
         style=style,
         ok_text="Download",
-        cancel_text="Cancel"
+        cancel_text="Cancel",
+        default=default_id  # Auto-select best format
     ).run()
 
     if result:
@@ -140,6 +141,11 @@ def shimmer_badge(message):
             time.sleep(0.05)
     print(f"\r{message}")
 
+# Find best video-only format by bitrate
+def extract_bitrate(desc):
+    match = re.search(r"(\d{2,4})k", desc)
+    return int(match.group(1)) if match else 0
+
 # --- Main flow ---
 def main():
     raw_url = prompt("🔗 Enter YouTube URL: ").strip()
@@ -148,8 +154,12 @@ def main():
     if not formats:
         print("⚠️ No formats found.")
         return
+    # Auto-select best video format
+    best_video_id = None
+    if video_only:
+        best_video_id = max(video_only, key=lambda x: extract_bitrate(x[1]))[0]
 
-    selected_format = select_format(formats)
+    selected_format = select_format(formats, default_id=best_video_id)
     if not selected_format:
         print("❌ No format selected.")
         return
