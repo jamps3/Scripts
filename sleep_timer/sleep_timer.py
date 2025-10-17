@@ -1,9 +1,11 @@
-import time
-import subprocess
 import argparse
+import datetime
+import msvcrt  # Windows-only for keyboard input
+import subprocess
 import sys
 import threading
-import msvcrt  # Windows-only for keyboard input
+import time
+
 
 def sleep_after_delay(minutes):
     seconds = int(minutes * 60)
@@ -16,8 +18,8 @@ def sleep_after_delay(minutes):
         nonlocal aborted
         while not aborted:
             if msvcrt.kbhit():
-                key = msvcrt.getch().decode('utf-8').lower()
-                if key == 'q':
+                key = msvcrt.getch().decode("utf-8").lower()
+                if key == "q":
                     aborted = True
                     print("\n❌ Sleep aborted by user.")
                     break
@@ -33,7 +35,18 @@ def sleep_after_delay(minutes):
         time.sleep(1)
 
     print("\n💤 Putting system to sleep now...")
+    sleep_start_time = datetime.datetime.now()
     subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
+
+    # After waking up
+    wake_time = datetime.datetime.now()
+    slept_for = wake_time - sleep_start_time
+    minutes_slept = slept_for.total_seconds() / 60
+    print(
+        f"\n🌅 Welcome back! You slept for approximately "
+        f"{minutes_slept:.1f} minutes."
+    )
+
 
 def interactive_menu():
     print("\n🛌 Sleep Timer Menu")
@@ -46,10 +59,10 @@ def interactive_menu():
 
     choice = input("\nEnter your choice (1–8, C, or Q): ").strip().lower()
 
-    if choice == 'q':
+    if choice == "q":
         print("👋 Exiting without setting a sleep timer.")
         sys.exit(0)
-    elif choice == 'c':
+    elif choice == "c":
         try:
             custom = float(input("Enter custom time in minutes: "))
             if custom <= 0:
@@ -71,9 +84,15 @@ def interactive_menu():
             print("❌ Invalid input. Exiting.")
             sys.exit(1)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Put Windows to sleep after a delay.")
-    parser.add_argument("minutes", type=float, nargs="?", help="Delay time in minutes before sleep")
+    parser.add_argument(
+        "minutes",
+        type=float,
+        nargs="?",
+        help="Delay time in minutes before sleep",
+    )
     args = parser.parse_args()
 
     if args.minutes is not None:

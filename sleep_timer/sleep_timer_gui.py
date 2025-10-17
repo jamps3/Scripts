@@ -1,14 +1,16 @@
-import tkinter as tk
-from tkinter import ttk, messagebox
+import datetime
+import subprocess
 import threading
 import time
-import subprocess
-import datetime
+import tkinter as tk
+from tkinter import messagebox, ttk
+
 
 class SleepTimerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sleep Timer")
+        self.version = "1.1"
+        self.root.title(f"Sleep Timer v{self.version}")
         self.root.geometry("300x300")
         self.abort_flag = False
 
@@ -17,7 +19,12 @@ class SleepTimerApp:
 
         self.options = [15, 30, 45, 60, 75, 90, 105, 120]
         self.selected = tk.IntVar(value=self.options[0])
-        self.dropdown = ttk.Combobox(root, textvariable=self.selected, values=self.options, state="readonly")
+        self.dropdown = ttk.Combobox(
+            root,
+            textvariable=self.selected,
+            values=self.options,
+            state="readonly",
+        )
         self.dropdown.pack()
 
         self.custom_label = ttk.Label(root, text="Or enter custom time (min):")
@@ -25,10 +32,14 @@ class SleepTimerApp:
         self.custom_entry = ttk.Entry(root)
         self.custom_entry.pack()
 
-        self.start_button = ttk.Button(root, text="Start Countdown", command=self.start_countdown)
+        self.start_button = ttk.Button(
+            root, text="Start Countdown", command=self.start_countdown
+        )
         self.start_button.pack(pady=10)
 
-        self.abort_button = ttk.Button(root, text="Abort", command=self.abort_countdown, state="disabled")
+        self.abort_button = ttk.Button(
+            root, text="Abort", command=self.abort_countdown, state="disabled"
+        )
         self.abort_button.pack()
 
         self.status = ttk.Label(root, text="")
@@ -36,7 +47,11 @@ class SleepTimerApp:
 
     def start_countdown(self):
         try:
-            minutes = float(self.custom_entry.get()) if self.custom_entry.get() else self.selected.get()
+            minutes = (
+                float(self.custom_entry.get())
+                if self.custom_entry.get()
+                else self.selected.get()
+            )
             if minutes <= 0:
                 raise ValueError
         except ValueError:
@@ -48,7 +63,9 @@ class SleepTimerApp:
         self.start_button.config(state="disabled")
         self.status.config(text=f"Countdown started: {minutes:.1f} min")
 
-        threading.Thread(target=self.run_countdown, args=(minutes,), daemon=True).start()
+        threading.Thread(
+            target=self.run_countdown, args=(minutes,), daemon=True
+        ).start()
 
     def abort_countdown(self):
         self.abort_flag = True
@@ -58,7 +75,6 @@ class SleepTimerApp:
 
     def run_countdown(self, minutes):
         total_seconds = int(minutes * 60)
-        self.sleep_start_time = datetime.datetime.now()
 
         for remaining in range(total_seconds, 0, -1):
             if self.abort_flag:
@@ -68,19 +84,29 @@ class SleepTimerApp:
             time.sleep(1)
 
         self.status.config(text="💤 Sleeping now...")
+        self.sleep_start_time = datetime.datetime.now()
         subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"])
 
-        # After sleep returns
-        self.root.after(1000, self.report_sleep_duration)
+        # After sleep returns, report the duration immediately
+        self.report_sleep_duration()
 
     def report_sleep_duration(self):
         wake_time = datetime.datetime.now()
         slept_for = wake_time - self.sleep_start_time
         minutes_slept = slept_for.total_seconds() / 60
 
-        self.status.config(text=f"🌅 Welcome back! Slept for ~{minutes_slept:.1f} min.")
-        self.abort_button.config(state="disabled")
-        self.start_button.config(state="normal")
+        # Use root.after to update GUI from main thread
+        self.root.after(
+            0,
+            lambda: [
+                self.status.config(
+                    text=f"🌅 Welcome back! Slept for ~{minutes_slept:.1f} min."
+                ),
+                self.abort_button.config(state="disabled"),
+                self.start_button.config(state="normal"),
+            ],
+        )
+
 
 if __name__ == "__main__":
     root = tk.Tk()
