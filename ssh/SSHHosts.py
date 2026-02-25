@@ -70,16 +70,26 @@ def get_ssh_hosts():
                     "IdentityFile": "",
                     "LocalForward": ""
                 }
-            elif current_host and re.match(r'^(\w+)\s+(.+)$', line):
-                key, value = re.match(r'^(\w+)\s+(.+)$', line).groups()
-                if key in current_host:
-                    current_host[key] = value
-                # Handle LocalForward (can have multiple values)
-                elif key == "LocalForward":
-                    if current_host["LocalForward"]:
-                        current_host["LocalForward"] += "; " + value
-                    else:
-                        current_host["LocalForward"] = value
+            elif current_host:
+                # Match any key-value pair
+                kv_match = re.match(r'^(\w+)\s+(.+)$', line)
+                if kv_match:
+                    key, value = kv_match.groups()
+                    if key in current_host:
+                        current_host[key] = value
+                    # Handle LocalForward (can have multiple values)
+                    elif key == "LocalForward":
+                        # Parse value - SSH config format: "local_port remote_host:remote_port"
+                        parts = value.split()
+                        if len(parts) >= 2:
+                            # Format: "local_port remote_host:remote_port"
+                            formatted = parts[0] + " " + parts[1]
+                        else:
+                            formatted = value
+                        if current_host["LocalForward"]:
+                            current_host["LocalForward"] += "; " + formatted
+                        else:
+                            current_host["LocalForward"] = formatted
 
     if current_host:
         hosts.append(current_host)
@@ -215,7 +225,8 @@ def add_ssh_host():
         remote_port = input("Enter remote port (e.g., 3000): ").strip()
         
         if local_port.isdigit() and remote_port.isdigit():
-            local_forward = f"{local_port} {remote_host} {remote_port}"
+            # SSH config format: LocalForward local_port remote_host:remote_port
+            local_forward = f"{local_port} {remote_host}:{remote_port}"
             print(f"Port forwarding configured: local {local_port} -> {remote_host}:{remote_port}")
         else:
             print("Error: Ports must be valid numbers. Port forwarding not configured.")
@@ -465,12 +476,18 @@ def ssh_with_port_forwarding():
             use_existing = use_existing_input == 'y'
 
         if use_existing and existing_forward:
-            # Parse existing forward config
+            # Parse existing forward config - format: "local_port remote_host:remote_port"
             parts = existing_forward.split(';')[0].strip().split()
-            if len(parts) >= 3:
+            if len(parts) >= 2:
                 local_port = parts[0]
-                remote_host = parts[1]
-                remote_port = parts[2]
+                # Split remote_host:remote_port
+                remote_parts = parts[1].split(':')
+                if len(remote_parts) >= 2:
+                    remote_host = remote_parts[0]
+                    remote_port = remote_parts[1]
+                else:
+                    print("Invalid existing port forwarding configuration.")
+                    return
             else:
                 print("Invalid existing port forwarding configuration.")
                 return
