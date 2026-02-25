@@ -67,12 +67,19 @@ def get_ssh_hosts():
                     "HostName": "",
                     "User": "",
                     "Port": "22",
-                    "IdentityFile": ""
+                    "IdentityFile": "",
+                    "LocalForward": ""
                 }
             elif current_host and re.match(r'^(\w+)\s+(.+)$', line):
                 key, value = re.match(r'^(\w+)\s+(.+)$', line).groups()
                 if key in current_host:
                     current_host[key] = value
+                # Handle LocalForward (can have multiple values)
+                elif key == "LocalForward":
+                    if current_host["LocalForward"]:
+                        current_host["LocalForward"] += "; " + value
+                    else:
+                        current_host["LocalForward"] = value
 
     if current_host:
         hosts.append(current_host)
@@ -198,6 +205,20 @@ def add_ssh_host():
     elif port_input:
         print("Error: Port must be a valid number between 1 and 65535.")
         return
+
+    # Ask about port forwarding
+    local_forward = ""
+    add_port_forward = input("Would you like to set up port forwarding? (y/n): ").strip().lower()
+    if add_port_forward == 'y':
+        local_port = input("Enter local port (e.g., 3000): ").strip()
+        remote_host = input("Enter remote host to forward to (e.g., localhost): ").strip()
+        remote_port = input("Enter remote port (e.g., 3000): ").strip()
+        
+        if local_port.isdigit() and remote_port.isdigit():
+            local_forward = f"{local_port} {remote_host} {remote_port}"
+            print(f"Port forwarding configured: local {local_port} -> {remote_host}:{remote_port}")
+        else:
+            print("Error: Ports must be valid numbers. Port forwarding not configured.")
 
     if not os.path.exists(ssh_directory):
         os.makedirs(ssh_directory)
@@ -372,6 +393,8 @@ def add_ssh_host():
     new_host_entry += f"    User {username}\n"
     if port != 22:
         new_host_entry += f"    Port {port}\n"
+    if local_forward:
+        new_host_entry += f"    LocalForward {local_forward}\n"
     new_host_entry += f"    IdentityFile {private_key_path}\n"
     new_host_entry += "    IdentitiesOnly yes\n"
 
@@ -387,8 +410,112 @@ def add_ssh_host():
     print(f"Hostname: {hostname}")
     print(f"Username: {username}")
     print(f"Port:     {port}")
+    if local_forward:
+        print(f"Forward:  localhost:{local_forward}")
     print(f"Key File: {private_key_path}")
     print("============================\n")
+
+def ssh_with_port_forwarding():
+    """Connect to SSH host with port forwarding (interactive mode)."""
+    hosts = get_ssh_hosts()
+
+    if not hosts:
+        print("No SSH hosts configured. Please add a host first.")
+        return
+
+    print("\n=== SSH with Port Forwarding ===")
+    show_ssh_hosts()
+
+    # Show hosts with their index numbers
+    print("\nSelect a host to connect with port forwarding:")
+    for i, host in enumerate(hosts, 1):
+        print(f"{i}. {host['Alias']} ({host['User']}@{host['HostName']})")
+
+    try:
+        selection = input("\nEnter the number of the host (or 'cancel' to abort): ").strip()
+        
+        if selection.lower() == 'cancel' or not selection:
+            print("Operation cancelled.")
+            return
+
+        host_index = int(selection) - 1
+        if host_index < 0 or host_index >= len(hosts):
+            print("Invalid selection.")
+            return
+
+        selected_host = hosts[host_index]
+        
+        # Get connection details
+        hostname = selected_host['HostName']
+        username = selected_host['User']
+        port = selected_host.get('Port', '22')
+        
+        # If port is not set or empty, default to 22
+        if not port:
+            port = '22'
+            
+        # If host already has LocalForward configured, offer to use it
+        existing_forward = selected_host.get('LocalForward', '')
+        use_existing = False
+        if existing_forward:
+            use_existing_input = input(
+                f"This host has port forwarding configured: {existing_forward}\n"
+                f"Use this configuration? (y/n): "
+            ).strip().lower()
+            use_existing = use_existing_input == 'y'
+
+        if use_existing and existing_forward:
+            # Parse existing forward config
+            parts = existing_forward.split(';')[0].strip().split()
+            if len(parts) >= 3:
+                local_port = parts[0]
+                remote_host = parts[1]
+                remote_port = parts[2]
+            else:
+                print("Invalid existing port forwarding configuration.")
+                return
+        else:
+            # Get new port forwarding details
+            print("\nEnter port forwarding details:")
+            local_port = input("Local port (e.g., 3000): ").strip()
+            remote_host = input("Remote host to forward to (e.g., localhost): ").strip()
+            remote_port = input("Remote port (e.g., 3000): ").strip()
+
+            if not local_port or not remote_host or not remote_port:
+                print("Error: All port forwarding fields are required.")
+                return
+
+            # Validate ports
+            if not local_port.isdigit() or not remote_port.isdigit():
+                print("Error: Ports must be valid numbers.")
+                return
+
+        # Build and execute SSH command with port forwarding
+        if IS_WINDOWS:
+            # On Windows, use cmd.exe
+            ssh_cmd = f'ssh -L {local_port}:{remote_host}:{remote_port}'
+            if port != '22':
+                ssh_cmd += f' -p {port}'
+            ssh_cmd += f' {username}@{hostname}'
+            
+            print(f"\nConnecting with port forwarding: {local_port} -> {remote_host}:{remote_port}")
+            print(f"Command: {ssh_cmd}\n")
+            os.system(ssh_cmd)
+        else:
+            # On Unix-like systems
+            ssh_cmd = ['ssh', '-L', f'{local_port}:{remote_host}:{remote_port}']
+            if port != '22':
+                ssh_cmd.extend(['-p', port])
+            ssh_cmd.append(f'{username}@{hostname}')
+            
+            print(f"\nConnecting with port forwarding: {local_port} -> {remote_host}:{remote_port}")
+            print(f"Command: {' '.join(ssh_cmd)}\n")
+            subprocess.run(ssh_cmd)
+
+    except ValueError:
+        print("Invalid input. Please enter a valid number.")
+    except Exception as e:
+        print(f"Error: {e}")
 
 def show_menu():
     """Show main menu."""
@@ -397,7 +524,8 @@ def show_menu():
     print("1. List SSH hosts")
     print("2. Add new SSH host")
     print("3. Remove SSH host")
-    print("4. Exit")
+    print("4. SSH with Port Forwarding")
+    print("5. Exit")
 
 def main():
     """Main menu loop."""
@@ -415,6 +543,9 @@ def main():
             remove_ssh_host()
             input("\nPress any key to continue...")
         elif choice == '4':
+            ssh_with_port_forwarding()
+            input("\nPress any key to continue...")
+        elif choice == '5':
             print("Goodbye!")
             break
         else:
@@ -422,4 +553,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
