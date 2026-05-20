@@ -4,11 +4,19 @@ import urllib.parse
 import time
 import sys
 import platform
+import shutil
+from pathlib import Path
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 # List of required libraries for all platforms
 required_libraries = [
     ("prompt_toolkit", "prompt_toolkit"),
     ("yt_dlp", "yt_dlp"),
+    ("yt_dlp_ejs", "yt-dlp-ejs"),
 ]
 
 # --- Install missing libraries ---
@@ -37,13 +45,32 @@ def install_missing_libraries():
             print("⚠️ Missing 'curses' library on Linux. Installing necessary libraries...")
             subprocess.check_call([subprocess.sys.executable, "-m", "pip", "install", "curses"])
 
-# Install missing libraries before running the main program
-install_missing_libraries()
+def find_ffmpeg_location():
+    ffmpeg_path = shutil.which("ffmpeg")
+    if ffmpeg_path:
+        return str(Path(ffmpeg_path).parent)
 
-from prompt_toolkit import prompt
-from prompt_toolkit.shortcuts import radiolist_dialog
-from prompt_toolkit.styles import Style
-from prompt_toolkit.formatted_text import HTML
+    winget_packages = Path.home() / "AppData" / "Local" / "Microsoft" / "WinGet" / "Packages"
+    matches = sorted(winget_packages.glob("Gyan.FFmpeg_*/*/bin/ffmpeg.exe"), reverse=True)
+    if matches:
+        return str(matches[0].parent)
+
+    return None
+
+def build_ytdlp_cmd():
+    cmd = ["python", "-m", "yt_dlp", "--js-runtimes", "node"]
+    ffmpeg_location = find_ffmpeg_location()
+    if ffmpeg_location:
+        cmd.extend(["--ffmpeg-location", ffmpeg_location])
+    return cmd
+
+def load_prompt_toolkit():
+    from prompt_toolkit import prompt
+    from prompt_toolkit.formatted_text import HTML
+    from prompt_toolkit.shortcuts import radiolist_dialog
+    from prompt_toolkit.styles import Style
+
+    return prompt, HTML, radiolist_dialog, Style
 
 # --- Clean YouTube URL ---
 def clean_url(url):
@@ -56,9 +83,12 @@ def clean_url(url):
 
 # --- Fetch formats from yt_dlp ---
 def fetch_formats(url):
+    _, HTML, _, _ = load_prompt_toolkit()
     print(f"\n🔍 Fetching formats for: {url}\n")
-    result = subprocess.run(["python", "-m", "yt_dlp", "-F", url], capture_output=True, text=True)
+    result = subprocess.run([*build_ytdlp_cmd(), "-F", url], capture_output=True, text=True)
     print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
 
     lines = result.stdout.splitlines()
     formats = []
@@ -67,7 +97,7 @@ def fetch_formats(url):
     progressive = []
 
     for line in lines:
-        if not re.match(r"^\d{2,3}\s", line):
+        if not re.match(r"^\d+\s", line):
             continue
         parts = re.split(r"\s{2,}", line.strip())
         if len(parts) < 2:
@@ -83,7 +113,7 @@ def fetch_formats(url):
         elif "video only" in desc.lower():
             color = "ansigreen"
             video_only.append((fmt_id, desc))
-        elif "audio" in desc.lower() and "video" in desc.lower():
+        else:
             progressive.append((fmt_id, desc))
 
         size_match = re.search(r"(\d+(\.\d+)?[KM]iB)", desc)
@@ -97,6 +127,7 @@ def fetch_formats(url):
 
 # --- Prompt for format selection ---
 def select_format(formats, default_id=None):
+    _, _, radiolist_dialog, Style = load_prompt_toolkit()
     choices = [(fmt_id, label) for fmt_id, label, _ in formats]
     tooltips = {fmt_id: tip for fmt_id, _, tip in formats}
 
@@ -115,19 +146,29 @@ def select_format(formats, default_id=None):
         style=style,
         ok_text="Download",
         cancel_text="Cancel",
-        default=default_id  # Auto-select best format
+        default=default_id,  # Auto-select best format
     ).run()
 
     if result:
         print(f"\n💡 Selected format: {result} — {tooltips.get(result, '')}")
     return result
 
+def wants_flac_conversion():
+    prompt, _, _, _ = load_prompt_toolkit()
+    choice = prompt("\n🎼 Convert audio to FLAC? (y to convert, Enter to keep original): ").strip().lower()
+    return choice in ["y", "yes"]
+
 # --- Confirm and run download ---
-def confirm_download(fmt_id, url):
+def confirm_download(fmt_id, url, postprocess_args=None):
+    prompt, _, _, _ = load_prompt_toolkit()
     choice = prompt(f"\n📥 Download format {fmt_id}? (Enter for yes, n to cancel): ").strip().lower()
     if choice in ["", "y", "yes"]:
-        print(f"\n▶ Running: yt_dlp -f {fmt_id} \"{url}\"")
-        subprocess.run(["python", "-m", "yt_dlp", "-f", fmt_id, url])
+        cmd = [*build_ytdlp_cmd(), "-f", fmt_id]
+        if postprocess_args:
+            cmd.extend(postprocess_args)
+        cmd.append(url)
+        print(f"\n▶ Running: {' '.join(cmd)}")
+        subprocess.run(cmd)
         shimmer_badge("🎉 Download complete!")
     else:
         print("❌ Download canceled.")
@@ -148,6 +189,7 @@ def extract_bitrate(desc):
 
 # --- Main flow ---
 def main():
+    prompt, _, _, _ = load_prompt_toolkit()
     raw_url = prompt("🔗 Enter YouTube URL: ").strip()
     url = clean_url(raw_url)
     formats, audio_only, video_only, progressive = fetch_formats(url)
@@ -174,17 +216,19 @@ def main():
 
     # If progressive (audio+video), download directly
     elif any(fmt_id == selected_format for fmt_id, _ in progressive):
-        print(f"\n🎬 Selected progressive format with audio+video.")
+        print("\n🎬 Selected progressive format with audio+video.")
         confirm_download(selected_format, url)
 
     # If audio-only, download directly
     elif any(fmt_id == selected_format for fmt_id, _ in audio_only):
-        print(f"\n🎧 Selected audio-only format.")
-        confirm_download(selected_format, url)
+        print("\n🎧 Selected audio-only format.")
+        postprocess_args = ["-x", "--audio-format", "flac"] if wants_flac_conversion() else None
+        confirm_download(selected_format, url, postprocess_args)
 
     else:
         print("⚠️ Unknown format type. Downloading as-is.")
         confirm_download(selected_format, url)
 
 if __name__ == "__main__":
+    install_missing_libraries()
     main()
