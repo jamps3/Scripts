@@ -11,37 +11,17 @@ HEART_RATE_CHAR = "00002a37-0000-1000-8000-00805f9b34fb"
 FEE1_CHAR = "0000fee1-0000-1000-8000-00805f9b34fb"
 FEA1_CHAR = "0000fea1-0000-1000-8000-00805f9b34fb"
 
+SKIP_NOTIFY_CHARS = {
+    "00002a05-0000-1000-8000-00805f9b34fb",  # Service Changed, often Access Denied on Windows
+}
+
+
 def hx(data: bytearray | bytes) -> str:
     return bytes(data).hex(" ").upper()
 
-def parse_activity_packet(data: bytearray | bytes) -> dict:
-    b = bytes(data)
-    raw = hx(b)
-
-    # FEA1 appears to wrap the same payload with leading 0x07
-    if len(b) == 10 and b[0] == 0x07:
-        b = b[1:]
-
-    if len(b) == 9:
-        return {
-            "type": "activity_live",
-            "sequence": b[0],
-            "field1": int.from_bytes(b[1:3], "little"),
-            "steps_counter": int.from_bytes(b[3:5], "little"),
-            "field3": b[5],
-            "calories": int.from_bytes(b[6:8], "little"),
-            "field5": b[8],
-            "raw": raw,
-        }
-
-    return {
-        "type": "activity_unknown",
-        "raw": raw,
-    }
 
 def parse_standard_heart_rate(data: bytearray | bytes) -> int | None:
     b = bytes(data)
-
     if not b:
         return None
 
@@ -59,35 +39,46 @@ def parse_standard_heart_rate(data: bytearray | bytes) -> int | None:
     return b[1]
 
 
+def parse_activity_packet(data: bytearray | bytes) -> dict:
+    b = bytes(data)
+    raw = hx(b)
+
+    # FEA1 wraps the same activity payload with leading 0x07.
+    if len(b) == 10 and b[0] == 0x07:
+        b = b[1:]
+
+    if len(b) == 9:
+        return {
+            "type": "activity_live",
+            "sequence": b[0],
+            "active_minutes_possible": int.from_bytes(b[1:3], "little"),
+            "distance_m": int.from_bytes(b[3:5], "little"),
+            "field3": b[5],
+            "calories": int.from_bytes(b[6:8], "little"),
+            "field5": b[8],
+            "raw": raw,
+        }
+
+    return {"type": "activity_unknown", "raw": raw}
+
+
 def parse_kospet_packet(data: bytearray | bytes) -> dict:
     b = bytes(data)
     raw = hx(b)
 
     # Single event packets:
-    # FE EA 20 05 64 -> camera remote event/opened?
+    # FE EA 20 05 64 -> weather/pairing event
     # FE EA 20 05 66 -> camera shutter pressed
     if len(b) == 5 and b[:4] == bytes.fromhex("FE EA 20 05"):
         event_code = b[4]
 
         if event_code == 0x64:
-            return {
-                "type": "camera_remote_event",
-                "event_code": event_code,
-                "raw": raw,
-            }
+            return {"type": "weather_pairing_event", "event_code": event_code, "raw": raw}
 
         if event_code == 0x66:
-            return {
-                "type": "camera_shutter",
-                "event_code": event_code,
-                "raw": raw,
-            }
+            return {"type": "camera_shutter", "event_code": event_code, "raw": raw}
 
-        return {
-            "type": "single_event",
-            "event_code": event_code,
-            "raw": raw,
-        }
+        return {"type": "single_event", "event_code": event_code, "raw": raw}
 
     # Player controls:
     # FE EA 20 06 67 01 -> previous
@@ -95,13 +86,11 @@ def parse_kospet_packet(data: bytearray | bytes) -> dict:
     # FE EA 20 06 67 06 -> play
     if len(b) == 6 and b[:5] == bytes.fromhex("FE EA 20 06 67"):
         action_code = b[5]
-
         actions = {
             0x01: "previous",
             0x02: "next",
             0x06: "play",
         }
-
         return {
             "type": "player_control",
             "action": actions.get(action_code, "unknown"),
@@ -109,54 +98,44 @@ def parse_kospet_packet(data: bytearray | bytes) -> dict:
             "raw": raw,
         }
 
-    # SpO2 measurement:
+    # SpO2:
     # FE EA 20 06 6B 62 -> SpO2 98%
     if len(b) == 6 and b[:5] == bytes.fromhex("FE EA 20 06 6B"):
         value = b[5]
-
         if value == 0x00:
-            return {
-                "type": "spo2_status",
-                "raw": raw,
-            }
+            return {"type": "spo2_status", "raw": raw}
+        return {"type": "spo2", "spo2": value, "raw": raw}
 
-        return {
-            "type": "spo2",
-            "spo2": value,
-            "raw": raw,
-        }
-
-    # Heart rate / status:
-    # FE EA 20 06 6D 00 -> status/progress/no value
-    # FE EA 20 06 6D 5C -> heart rate 92 bpm
+    # Heart rate:
+    # FE EA 20 06 6D 00 -> status/progress
+    # FE EA 20 06 6D 5C -> 92 bpm
     if len(b) == 6 and b[:5] == bytes.fromhex("FE EA 20 06 6D"):
         value = b[5]
-
         if value == 0x00:
-            return {
-                "type": "heart_rate_status",
-                "raw": raw,
-            }
+            return {"type": "heart_rate_status", "raw": raw}
+        return {"type": "heart_rate_proprietary", "bpm": value, "raw": raw}
 
+    # Battery saving mode:
+    # FE EA 20 07 A4 01 00 -> enabled
+    # FE EA 20 07 A4 00 00 -> disabled
+    if len(b) == 7 and b[:5] == bytes.fromhex("FE EA 20 07 A4"):
+        enabled = b[5] == 0x01
         return {
-            "type": "heart_rate_proprietary",
-            "bpm": value,
+            "type": "battery_saving_mode",
+            "enabled": enabled,
+            "state_byte": b[5],
             "raw": raw,
         }
 
-    # Blood pressure result / abort:
+    # Blood pressure:
     # FE EA 20 08 69 00 86 4F -> 134/79
-    # FE EA 20 08 69 00 88 4A -> 136/74
     # FE EA 20 08 69 00 FF FF -> aborted/failed
     if len(b) == 8 and b[:6] == bytes.fromhex("FE EA 20 08 69 00"):
         systolic = b[6]
         diastolic = b[7]
 
         if systolic == 0xFF and diastolic == 0xFF:
-            return {
-                "type": "blood_pressure_aborted",
-                "raw": raw,
-            }
+            return {"type": "blood_pressure_aborted", "raw": raw}
 
         return {
             "type": "blood_pressure",
@@ -165,10 +144,7 @@ def parse_kospet_packet(data: bytearray | bytes) -> dict:
             "raw": raw,
         }
 
-    return {
-        "type": "unknown",
-        "raw": raw,
-    }
+    return {"type": "unknown", "raw": raw}
 
 
 def describe_packet(uuid: str, data: bytearray | bytes) -> str:
@@ -176,14 +152,13 @@ def describe_packet(uuid: str, data: bytearray | bytes) -> str:
     raw = hx(b)
     uuid = uuid.lower()
 
-    if uuid == BATTERY_CHAR:
-        if len(b) >= 1:
-            return f"Battery: {b[0]}% raw={raw}"
+    if uuid == BATTERY_CHAR and len(b) >= 1:
+        return f"Battery: {b[0]}% raw={raw}"
 
     if uuid == HEART_RATE_CHAR:
         bpm = parse_standard_heart_rate(b)
         return f"Heart rate standard BLE: {bpm} bpm raw={raw}"
-    
+
     if uuid in (FEE1_CHAR, FEA1_CHAR):
         parsed = parse_activity_packet(b)
 
@@ -192,7 +167,7 @@ def describe_packet(uuid: str, data: bytearray | bytes) -> str:
                 f"Activity live: "
                 f"seq={parsed['sequence']} "
                 f"field1={parsed['field1']} "
-                f"steps_counter={parsed['steps_counter']} "
+                f"distance={parsed['distance_m']} m "
                 f"calories={parsed['calories']} kcal "
                 f"raw={parsed['raw']}"
             )
@@ -200,23 +175,16 @@ def describe_packet(uuid: str, data: bytearray | bytes) -> str:
         return f"Activity unknown raw={parsed['raw']}"
 
     parsed = parse_kospet_packet(b)
-
     packet_type = parsed["type"]
 
-    if packet_type == "camera_remote_event":
-        return (
-            f"Camera remote event/opened? "
-            f"code=0x{parsed['event_code']:02X} raw={parsed['raw']}"
-        )
+    if packet_type == "weather_pairing_event":
+        return f"Weather/pairing event code=0x{parsed['event_code']:02X} raw={parsed['raw']}"
 
     if packet_type == "camera_shutter":
         return f"Camera shutter pressed raw={parsed['raw']}"
 
     if packet_type == "single_event":
-        return (
-            f"Single event packet "
-            f"code=0x{parsed['event_code']:02X} raw={parsed['raw']}"
-        )
+        return f"Single event packet code=0x{parsed['event_code']:02X} raw={parsed['raw']}"
 
     if packet_type == "player_control":
         return (
@@ -234,7 +202,11 @@ def describe_packet(uuid: str, data: bytearray | bytes) -> str:
         return f"Heart rate: {parsed['bpm']} bpm raw={parsed['raw']}"
 
     if packet_type == "heart_rate_status":
-        return f"Heart rate status/progress raw={parsed['raw']}"
+        return f"Measurement stopped raw={parsed['raw']}"
+
+    if packet_type == "battery_saving_mode":
+        state = "enabled" if parsed["enabled"] else "disabled"
+        return f"Battery saving mode: {state} raw={parsed['raw']}"
 
     if packet_type == "blood_pressure":
         return (
@@ -311,6 +283,11 @@ async def main():
 
         for service in client.services:
             for char in service.characteristics:
+                uuid = char.uuid.lower()
+
+                if uuid in SKIP_NOTIFY_CHARS:
+                    continue
+
                 if "notify" in char.properties or "indicate" in char.properties:
                     notify_chars.append(char.uuid)
 

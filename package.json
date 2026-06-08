@@ -1,0 +1,24 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "![ASCII-mandala screenshot](https://github.com/jamps3/Scripts/blob/master/ASCII-mandala/screenshot.png)\r ## [server-migration/](https://github.com/jamps3/Scripts/tree/master/server-migration) Linux server migration tools\r ## [sleep_timer/](https://github.com/jamps3/Scripts/tree/master/sleep_timer) Windows sleep timer with GUI\r ![sleep_timer screenshot](https://github.com/jamps3/Scripts/blob/master/sleep_timer/screenshot.png)\r ## [ssh/](https://github.com/jamps3/Scripts/tree/master/ssh) Passwordless SSH logins\r ![SSHHosts.py screenshot 2](https://github.com/jamps3/Scripts/blob/master/ssh/SSHHosts_2.png)\r ## [yt-dlp/](https://github.com/jamps3/Scripts/tree/master/yt-dlp) YouTube yt-dlp download interface\r ![ytdl.py screenshot](https://github.com/jamps3/Scripts/blob/master/yt-dlp/ytdl.png)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jamps3/Scripts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jamps3/Scripts/issues"
+  },
+  "homepage": "https://github.com/jamps3/Scripts#readme",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}
